@@ -1,0 +1,4 @@
+tqdm
+jieba
+pypinyin
+Pinyin2Hanzi
