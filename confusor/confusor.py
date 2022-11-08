@@ -5,6 +5,7 @@
 """
 import os
 import sys
+sys.path.append("./")
 sys.path.append("../")
 
 from tqdm import tqdm
@@ -54,9 +55,11 @@ WC_WORD_FREQ_PATH = f'{CONFUSOR_DATA_DIR}/wc_data_records/wc_word_frequency_scor
 WC_2GRAM_FREQ_PATH = f'{CONFUSOR_DATA_DIR}/wc_data_records/wc_word2_frequency_score.pkl'  # 2-gram
 
 # features from financal documents: word Frequency
+"""
 FINDOC_WORD_FREQ_PATH = f'{CONFUSOR_DATA_DIR}/wc_data_records/findoc_word_frequency_score_01.pkl'  # zi + 1-gram word
 FINDOC_WORD_2GRAM_FREQ_PATH = f'{CONFUSOR_DATA_DIR}/wc_data_records/findoc_word2_frequency_score.pkl'  # 2-gram
 FINDOC_ZI_FREQ_PATH = f'{CONFUSOR_DATA_DIR}/wc_data_records/findoc_char_frequency.pkl'
+"""
 
 # select one from the paths above.
 FREQ_PATH = WC_WORD_FREQ_PATH
@@ -385,6 +388,10 @@ class Confusor(object):
 
         if 'single-freedom' in method:
             more_cand_pinyins = self.get_pinyin_sequence_single_freedom(token)
+            if cand_pinyins is None:
+                cand_pinyins = []
+            if more_cand_pinyins is None:
+                more_cand_pinyins = []
             cand_pinyins = sorted(list(set(cand_pinyins + more_cand_pinyins)), 
                                   key=lambda x: x[1])
             if self.debug:
@@ -478,8 +485,10 @@ class Confusor(object):
         """
         ret = []
         pinyin_list = self.get_pinyin_list(token)
+        if pinyin_list is None:
+            return ret
         token_length = len(pinyin_list)
-        if pinyin_list is None or len(pinyin_list) <= 1:
+        if token_length <= 1:
             return ret
         for _idx, _py in enumerate(pinyin_list):
             if debug:
