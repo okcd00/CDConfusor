@@ -116,10 +116,10 @@ class SQLiteDB(object):
 
     def write(self, samples, sid_offset=0):
         self.init_writer()
-
+        if self.saved_length is not None:
+            sid_offset = self.saved_length
         # execute
         for i, (word, confusion) in tqdm(enumerate(samples.items())):
-            sid = unicode(f'{i + sid_offset}')
             if isinstance(confusion, list):
                 confusion = '\x01'.join(confusion)
             try:
@@ -130,10 +130,15 @@ class SQLiteDB(object):
                 # sqlite3.DatabaseError: database disk image is malformed
                 # https://blog.csdn.net/The_Time_Runner/article/details/106590571
             except Exception as e:
-                print(e)
-                print(i, word)
+                if isinstance(e, sqlite3.IntegrityError):
+                    print(f"Overwrite {i}-th word {word}.")
+                    self.cursor.execute(
+                        "UPDATE samples SET confusion='{}' WHERE word='{}'".format(confusion, word))
+                else:
+                    print(type(e), e)
 
         self.conn.commit()
+        self.init_saved_length()
 
     def get_by_word(self, word):
         self.get_cursor()
@@ -154,8 +159,8 @@ class SQLiteDB(object):
             raise ValueError()
         return deepcopy(sample)
 
-    def init_saved_length(self):
-        if self.sindex is not None:
+    def init_saved_length(self, force=False):
+        if force or self.sindex is not None:
             return
         self.get_cursor()
         word_index = self.cursor.execute(
@@ -169,10 +174,14 @@ class SQLiteDB(object):
         self.saved_length = len(self.words)
         # logging.warn(json.dumps(self.sids))
 
-    def __getitem__(self, word):
+    def __getitem__(self, sindex):
         if self.cursor is None:
             self.get_cursor()
             self.init_saved_length()
+        if isinstance(sindex, int):
+            word = self.words[sindex]
+        else:
+            word = sindex
         return self.get_by_word(word)
 
     def __len__(self):
