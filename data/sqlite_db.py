@@ -116,6 +116,8 @@ class SQLiteDB(object):
 
     def write(self, samples, sid_offset=0):
         self.init_writer()
+        self.init_saved_length(force=True)
+
         if self.saved_length is not None:
             sid_offset = self.saved_length
         # execute
@@ -138,7 +140,7 @@ class SQLiteDB(object):
                     print(type(e), e)
 
         self.conn.commit()
-        self.init_saved_length()
+        self.init_saved_length(force=True)
 
     def get_by_word(self, word):
         self.get_cursor()
@@ -160,7 +162,7 @@ class SQLiteDB(object):
         return deepcopy(sample)
 
     def init_saved_length(self, force=False):
-        if force or self.sindex is not None:
+        if not force and self.sindex is not None:
             return
         self.get_cursor()
         word_index = self.cursor.execute(
