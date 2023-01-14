@@ -1,3 +1,7 @@
+checkpoints/
+infer_model/
+log/
+
 # Byte-compiled / optimized / DLL files
 tmp/
 __pycache__/

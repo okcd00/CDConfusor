@@ -15,6 +15,9 @@ Confusor applies the two-step retrieval: **pinyin retrieval** and **word retriev
 See `/docs/confset.pdf` for more details.
 
 
+### Datasets
+Datasets come form this [repo](https://github.com/okcd00/realworld_chinese_typos), will be published soon.
+
 
 ### Usage
 
