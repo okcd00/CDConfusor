@@ -1,6 +1,19 @@
+# phonetic-ernie
+log/
 checkpoints/
 infer_model/
-log/
+
+# dcn
+*.bin
+runs/
+dcn_model*/
+chinese-roberta-wwm-ext/
+Wang271k/
+
+# t5
+t5_model*/
+
+# =========================================
 
 # Byte-compiled / optimized / DLL files
 tmp/

@@ -1,0 +1,10 @@
+jieba
+pypinyin
+numpy
+six
+loguru
+
+torch>=1.3.1
+pytorch-lightning>=1.1.2
+transformers>=4.4.2
+tensorboardX
