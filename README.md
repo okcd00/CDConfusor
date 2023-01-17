@@ -17,6 +17,11 @@ See `/docs/confset.pdf` for more details.
 
 ### Datasets
 Datasets come form this [repo](https://github.com/okcd00/realworld_chinese_typos), will be published soon.
++ `.tsv` for datasets with pair-wise sentences: 
+  + `<error_sentence>\t<correct_sentence>`
++ `.dcn.txt` for datasets with DCN-form: 
+  + train: `(pid=test-01)\t<error_sentence>\t<correct_sentence>\t<attention_ids>\t<pinyin_ids_for_err>`
+  + test: `(pid=test-01)\t<error_sentence>`
 
 
 ### Usage
