@@ -30,7 +30,7 @@ from paddlenlp.transformers import ErnieModel, ErnieTokenizer
 from paddlenlp.utils.log import logger
 from paddlenlp.metrics import DetectionF1, CorrectionF1
 from model import ErnieForCSC
-from utils import convert_example, create_dataloader, read_train_ds
+from utils import convert_example, create_dataloader, read_train_ds, read_test_ds
 
 # yapf: disable
 parser = argparse.ArgumentParser()
@@ -51,6 +51,7 @@ parser.add_argument("--pinyin_vocab_file_path", type=str, default="pinyin_vocab.
 parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
 parser.add_argument("--ignore_label", default=-1, type=int, help="Ignore label for CrossEntropyLoss")
 parser.add_argument("--extra_train_ds_dir", default=None, type=str, help="The directory of extra train dataset.")
+parser.add_argument("--extra_test_ds_file", default=None, type=str, help="The directory of another test dataset.")
 
 # yapf: enable
 args = parser.parse_args()
@@ -106,6 +107,14 @@ def do_train(args):
         pad_pinyin_id=pinyin_vocab[pinyin_vocab.pad_token])
 
     train_ds, eval_ds = load_dataset('sighan-cn', splits=['train', 'dev'])
+    if args.extra_test_ds_file:
+        if os.path.exists(args.extra_test_ds_file):
+            eval_ds = MapDataset(
+                load_dataset(
+                    read_train_ds, 
+                    data_path=args.extra_test_ds_file,
+                    splits=["eval"], 
+                    lazy=False).data)
 
     # Extend current training dataset by providing extra training 
     # datasets directory. The suffix of dataset file name in extra 
@@ -118,7 +127,7 @@ def do_train(args):
         data_files = [
             os.path.join(args.extra_train_ds_dir, data_file)
             for data_file in os.listdir(args.extra_train_ds_dir)
-            if data_file.endswith(".txt")
+            if data_file.endswith(".tsv")  # @okcd00: to distinguish with `.dcn.txt`
         ]
         for data_file in data_files:
             ds = load_dataset(

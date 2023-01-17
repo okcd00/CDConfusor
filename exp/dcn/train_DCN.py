@@ -36,7 +36,7 @@ from transformers import (
     AutoConfig,
     AutoModelWithLMHead,
     DCNForMaskedLM,
-    DCNBertForMaskedLM,
+    # DCNBertForMaskedLM,
     AutoTokenizer,
     BertTokenizer,
     DataCollatorForLanguageModeling,

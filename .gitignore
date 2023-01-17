@@ -1,4 +1,5 @@
 .vscode/
+spellGraphs.txt
 
 # phonetic-ernie
 log/
@@ -10,7 +11,7 @@ infer_model/
 runs/
 dcn_model*/
 chinese-roberta-wwm-ext/
-Wang271k/
+Wang271*/
 
 # t5
 t5_model*/

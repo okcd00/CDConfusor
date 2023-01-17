@@ -2,11 +2,16 @@ set -v
 set -e
 
 
-TRAIN_FILE=../data/cn/Wang271k/dcn_train.dcn.txt
-TEST_FILE=../data/cn/sighan15/sighan15_test.dcn.txt
+TRAIN_FILE=../data/cn/Wang271k_augc/dcn_train.augc.dcn.txt
+TEST_FILE=../data/cn/rw/rw_test.dcn.txt
+
 BERT_MODEL=../pretrained_models/chinese-roberta-wwm-ext/
-OUTPUT_DIR=dcn_model_ws/
-SAVE_STEPS=8794  # when batch_size=8, 8794 steps/epoch; or bs=4, 17587 steps/epoch
+OUTPUT_DIR=dcn_models/wsc_train_model_192/
+
+# for DCN_augc, 17007 steps/epoch
+# for DCN_train, when batch_size=8, 8794 steps/epoch; or bs=4, 17587 steps/epoch
+
+SAVE_STEPS=17007  
 SEED=1038
 LR=5e-5
 SAVE_TOTAL_LIMIT=5
@@ -15,7 +20,7 @@ BATCH_SIZE=4  # 8 will OOM for 192-text-len on 12G GPU
 NUM_EPOCHS=5
 
 
-CUDA_VISIBLE_DEVICES=7,6,5,4 python train_DCN.py \
+CUDA_VISIBLE_DEVICES=1,2,3,4 python train_DCN.py \
     --output_dir $OUTPUT_DIR \
 	--learning_rate $LR  \
     --per_gpu_train_batch_size $BATCH_SIZE \
