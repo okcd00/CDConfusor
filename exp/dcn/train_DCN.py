@@ -256,7 +256,8 @@ def main():
     train_dataset = get_dataset(
         data_args, tokenizer=tokenizer, shuffle=True) if training_args.do_train else None
     eval_dataset = get_dataset(
-        data_args, tokenizer=tokenizer, evaluate=True, shuffle=False) if training_args.do_eval or training_args.do_predict else None
+        data_args, tokenizer=tokenizer, evaluate=True, shuffle=False) \
+        if training_args.do_eval or training_args.do_predict else None
 
     data_collator = DataCollatorForPinyinIndexLanguageModeling(
         tokenizer=tokenizer, mlm=data_args.mlm, mlm_probability=data_args.mlm_probability
@@ -308,8 +309,10 @@ def main():
 
         results.update(result)
 
+    """
     if training_args.do_predict:
         trainer.evaluate_sighan()
+    """
     return results
 
 
