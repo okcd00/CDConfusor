@@ -1,4 +1,6 @@
+*.bak
 .vscode/
+input_candidates*.json
 spellGraphs.txt
 
 # phonetic-ernie
