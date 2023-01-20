@@ -141,9 +141,9 @@ def eval_spell(truth_path, pred_path, with_error=True):
 if __name__ == '__main__':
   output_path = sys.argv[1]
   data_path = sys.argv[2]
-  input_path = os.path.join(data_path, "sighan15_test.dcn.txt")
+  input_path = os.path.join(data_path, '..', 'sighan15', "sighan15_test.dcn.txt")
   pred_path = os.path.join(os.path.dirname(output_path), 'pred_result.txt')
-  orig_input_path = os.path.join(data_path, "TestInput.txt")
-  orig_truth_path = os.path.join(data_path, "TestTruth.txt")
+  orig_input_path = os.path.join(data_path, '..', 'sighan15', "TestInput.txt")
+  orig_truth_path = os.path.join(data_path, '..', 'sighan15', "TestTruth.txt")
   convert_from_myformat_to_sighan(input_path, output_path, pred_path, orig_truth_path, spellgcn=False)
   eval_spell(orig_truth_path, pred_path, with_error=False)

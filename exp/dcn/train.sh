@@ -2,13 +2,13 @@ set -v
 set -e
 
 
-TRAIN_FILE=../data/cn/Wang271k_augc/dcn_train.augc.dcn.txt
+TRAIN_FILE=../data/cn/Wang271k_augw/dcn_train.augw.dcn.txt
 TEST_FILE=../data/cn/rw/rw_test.dcn.txt
 
 BERT_MODEL=../pretrained_models/chinese-roberta-wwm-ext/
-OUTPUT_DIR=dcn_models/wsc_train_model_192/
+OUTPUT_DIR=dcn_models/wsw_train_model_192/
 
-# for DCN_augc, 17007 steps/epoch
+# for DCN_augc, 17007 steps/epoch, for DCN_augw, steps/epoch
 # for DCN_train, when batch_size=8, 8794 steps/epoch; or bs=4, 17587 steps/epoch
 
 SAVE_STEPS=17007  

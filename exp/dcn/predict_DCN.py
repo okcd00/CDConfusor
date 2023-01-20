@@ -146,7 +146,6 @@ def load_dataset(path, index=1):
     return input_lines
 
 
-
 def main():
     parser = HfArgumentParser(
         (ModelArguments, DataTrainingArguments))
@@ -171,7 +170,7 @@ def main():
             "You are instantiating a new config instance from scratch.")
 
     tokenizer = DcnTokenizer(os.path.join(model_args.model, 'vocab.txt'), 
-                             os.path.join(model_args.model, 'pinyin_vocab.txt'))
+                             os.path.join(model_args.model, '..', 'pinyin_vocab.txt'))
 
     if model_args.model:
         model = DCNForMaskedLM.from_pretrained(
@@ -196,7 +195,7 @@ def main():
     results = result_predict(input_lines, tokenizer, model, 'cuda',
                              batch_size=data_args.batch_size, 
                              max_seq_length=data_args.max_len)
-
+        
     with open(data_args.output_file, 'w') as f:
         for inp, res in zip(input_lines, results):
             blank_indexes = []
@@ -209,7 +208,6 @@ def main():
             line = ''.join(res)
             line = line[:len(inp)]
             print(line, file=f)
-
     return results
 
 
