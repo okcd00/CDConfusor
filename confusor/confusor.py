@@ -74,7 +74,9 @@ SIGHAN_CFS_PATH = f'{CONFUSOR_DATA_DIR}/sighan_confusion.txt'
 # pinyin-level confusion set
 PINYIN_MAPPING_PATH = f'{CONFUSOR_DATA_DIR}/pinyin_mapping.json'
 
- 
+# IME candidates
+IME_CANDIDATES_PATH = '/home/chendian/CDConfusor/data/input_candidates.google.json'
+
 class Confusor(object):
     PUNC_LIST = "，；。？！…"
 
@@ -83,7 +85,7 @@ class Confusor(object):
     def __init__(self, 
                  amb_score=0.5, inp_score=0.25, cos_threshold=(0.1, 0.5), method='beam', 
                  cand_pinyin_num=10, cand_fzimu_num=100, cand_dcc_num=50, cand_zi_num=50, 
-                 keep_num=500, weight=(1, 0.5, 1), conf_size=10,
+                 keep_num=500, weight=(1, 0.5, 1), conf_size=10, ime_weight=0,
                  pinyin_sample_mode='sort', 
                  token_sample_mode='special', 
                  debug=False):
@@ -114,7 +116,9 @@ class Confusor(object):
         self.cand_zi_num = cand_zi_num
         self.keep_num = keep_num
         self.weight = weight
+        self.ime_weight = ime_weight
         self.conf_size = conf_size
+        self.conf_with_scores = False  # toggle for score outputs
         self.pu = PinyinUtils()
         self.pinyin_sample_mode = pinyin_sample_mode
         self.token_sample_mode = token_sample_mode
@@ -164,8 +168,21 @@ class Confusor(object):
         self.wc_2gram_freq = {}
 
         if USE_WC_WORD_FREQ:
-            self.wc_word_freq = self.load_pickle(WC_WORD_FREQ_PATH)
-            self.wc_2gram_freq = self.load_pickle(WC_2GRAM_FREQ_PATH)
+            if WC_WORD_FREQ_PATH != FREQ_PATH:
+                self.wc_word_freq = self.load_pickle(WC_WORD_FREQ_PATH)
+            else:
+                self.wc_word_freq = self.word_freq
+            if WC_2GRAM_FREQ_PATH != FREQ_PATH_2GRAM:
+                self.wc_2gram_freq = self.load_pickle(WC_2GRAM_FREQ_PATH)
+            else:
+                self.wc_2gram_freq = self.word_2gram_freq
+
+        if self.ime_weight > 0:
+            from utils import load_json
+            if not os.path.exists(IME_CANDIDATES_PATH):
+                print(f"invalid IME_CANDIDATES_PATH: {IME_CANDIDATES_PATH}")
+            self.ime_candidates = load_json(IME_CANDIDATES_PATH)
+            self.IME_MAX_CANDIDATE_COUNT = 15
 
     def record_time(self, information):
         """
@@ -225,11 +242,14 @@ class Confusor(object):
         return self.score_matrix
 
     def load_pickle(self, fp):
-        print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)")
+        start_time = time.time()
+        print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
         if not os.path.exists(fp):
             print("Failed")
             return None
-        return pickle.load(open(fp, 'rb'))
+        ret = pickle.load(open(fp, 'rb'))
+        print(f"cost {round(time.time() - start_time, 3)} seconds.")
+        return ret
 
     def load_embeddings(self, tokens):
         """
@@ -658,6 +678,32 @@ class Confusor(object):
             print(cand_pyseq)
         return cand_pyseq
 
+    def get_ime_score(self, token, pinyin_case):
+        if self.ime_weight <= 0.:
+            return 0.
+        order_case = []
+        """
+        if isinstance(multiple_pinyin, list):
+            scores = [self.get_ime_score(token, _py) for _py in pinyin]
+            return sum(scores) / len(scores)
+        """
+        pinyin = ''.join(pinyin_case)
+        for i in range(1, len(pinyin_case[-1])):
+            candidates = []
+            _py = pinyin[:i].strip()
+            if _py in self.ime_candidates:
+                candidates = self.ime_candidates[_py]
+            else:
+                print(f"<{_py}> is not recorded, obtain it with okcd00/CDIMERecorder.")
+                print(self.ime_candidates.get(f"{_py}"))
+            if token in candidates:
+                order_case.append(1. / (candidates.index(token)+1))
+            else:
+                order_case.append(1. / (self.IME_MAX_CANDIDATE_COUNT+1))
+        if len(order_case) == 0: 
+            return 0.
+        return sum(order_case) / len(order_case)
+
     def get_confuse_tokens(self, token, pinyin_scores, cos_threshold, token_sample_mode, weight, size, sort_ratio=0.7, debug=False):
         """
         @param pinyin_scores: a list of tuples (pinyin, score) sorted by scores.
@@ -711,7 +757,7 @@ class Confusor(object):
         for tok in filtered_cand_toks:
             cosine_sim = 0
             if weight_cos != 0 and calculate_cos_sim:
-                print(weight_cos, calculate_cos_sim)
+                # print(weight_cos, calculate_cos_sim)
                 cosine_sim = cosine_similarity(tok2emb[token], tok2emb[tok])
             _cand_py_case = self.pu.to_pinyin(tok)
             _cand_py = ''.join(_cand_py_case)
@@ -740,8 +786,8 @@ class Confusor(object):
                     freq_delta = max(wc_freq, wc_2gram_freq) - \
                                  max(findoc_freq, findoc_2gram_freq)
                     freq_score = max(
-                        [findoc_freq + findoc_2gram_freq, 
-                         wc_freq + wc_2gram_freq]) / 2
+                        # [findoc_freq + findoc_2gram_freq, wc_freq + wc_2gram_freq]) / 2
+                        wc_freq, wc_2gram_freq)
                     if wc_2gram_freq > 0. and findoc_freq + findoc_2gram_freq + wc_freq == 0.:
                         freq_score *= 0.9
                     final_score = sum([
@@ -750,6 +796,8 @@ class Confusor(object):
                             weight_freq * freq_score)])
                 if sum(freq_scores) == 0.:
                     final_score -= 1.  # ignore
+                if self.ime_weight > 0:
+                    final_score += self.get_ime_score(tok, _cand_py_case) * self.ime_weight
             else:
                 final_score = weight_py * pinyin_score + \
                               weight_freq * (findoc_freq + findoc_2gram_freq)
@@ -785,14 +833,20 @@ class Confusor(object):
                     print_str += f'| cos_sim: {round(_cosine_sim, 3):.3f} '
                 print(print_str)
         if len(sort_cand) <= size:
-            return [p[0] for p in sort_cand]
+            if self.conf_with_scores:
+                return [p for p in sort_cand[:size]]
+            else:
+                return [p[0] for p in sort_cand]
         if token_sample_mode == 'random':
             sort_num = int(size * sort_ratio)
             cand_pairs = sort_cand[:sort_num]
             cand_pairs.extend(uniform_sample(sort_cand[sort_num:], size - sort_num))
             token_res = [p[0] for p in cand_pairs]
         elif token_sample_mode == 'sort':
-            token_res = [p[0] for p in sort_cand[:size]]
+            if self.conf_with_scores:
+                token_res = [p for p in sort_cand[:size]]
+            else:
+                token_res = [p[0] for p in sort_cand[:size]]
         else:
             raise ValueError("invalid mode: {}".format(token_sample_mode))
         return token_res
@@ -831,9 +885,11 @@ class Confusor(object):
             self.record_time('start')
         if self.debug:
             print(self.get_pinyin_list(word))
+
         cand_pinyins = self.get_pinyin_sequence(
             token=word, method=self.method, 
             pinyin_sample_mode=self.pinyin_sample_mode)
+
         if self.debug:
             # pprint(sorted(cand_pinyins, key=lambda x: x[1]))
             pprint(list(map(lambda x: x[0], 
@@ -868,28 +924,43 @@ def default_confusor():
         debug=False)
 
 
-if __name__ == "__main__":
+def main():
     debug = True
     conf = Confusor(
         cand_pinyin_num=100, 
-        cos_threshold=(0., 1.), 
+        cos_threshold=(0., .8), 
         method='all-similar single-freedom', 
         token_sample_mode='sort', 
         pinyin_sample_mode='sort',  # special
-        weight=[1., 0, .2],   # pinyin score, word freq score
-        conf_size=300, 
+        weight=[1., 0, .2],   # pinyin score, word freq score, IME ranking
+        conf_size=300, ime_weight=1,
         debug=debug)
 
     print(conf.compute_RED(['huang','shang','huang'], ['huang','shan','huang']))
 
+    
     test_case = [
         '公', '司', '业',
-        '工商', '出生', '这边', '短期', '超短期',
+         #'工商', '出生', '这边', '短期', '超短期',
         '不确定性', '特色旅游']
 
     for word in test_case:
         print(time.ctime())
-        print(conf(word))
+        # print(conf(word))
     
-    print(conf.get_pinyin_sequence_single_freedom('短期', debug=debug))
+    # print(conf.get_pinyin_sequence_single_freedom('短期', debug=debug))
+    return conf
 
+
+if __name__ == "__main__":
+    conf = main()
+    test_words = ['卖', '买', '铁', '铜', '标志', '标识', '登录', '登陆']
+
+    tok2emb = conf.load_embeddings(test_words)
+    for i in range(8):
+        print(test_words[i])
+        for j in range(8):
+            print(test_words[j], cosine_similarity(tok2emb[test_words[i]], tok2emb[test_words[j]]))
+
+    
+    

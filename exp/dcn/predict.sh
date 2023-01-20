@@ -4,7 +4,7 @@ set -v
 set -e
 
 TASK=cctc
-MODEL_DIR=dcn_models/wsw_train_model_192/
+MODEL_DIR=dcn_models/wsw3_train_model_192/
 
 INPUT_FILE=../data/cn/$TASK/${TASK}_test.sighan.txt
 DCN_FILE=../data/cn/$TASK/${TASK}_test.dcn.txt
