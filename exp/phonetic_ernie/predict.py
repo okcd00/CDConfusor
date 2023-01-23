@@ -249,4 +249,4 @@ if __name__ == "__main__":
     results = predictor.predict(samples, batch_size=args.batch_size)
     acc, precision, recall, f1 = evaluate(
         samples, results, answers)
-    print(dict(acc=acc, precision=precision, recall=recall, f1=f1))
+    print(f">>> {100*precision:.02f}/{100*recall:.02f}/{100*f1:.02f} | {100*acc:.02f}")

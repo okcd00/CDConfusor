@@ -932,7 +932,7 @@ def main():
         method='all-similar single-freedom', 
         token_sample_mode='sort', 
         pinyin_sample_mode='sort',  # special
-        weight=[1., 0, .2],   # pinyin score, word freq score, IME ranking
+        weight=[1., 0, .2],   # pinyin score, cos_sim, word freq score, + 1 x IME ranking
         conf_size=300, ime_weight=1,
         debug=debug)
 
@@ -941,26 +941,29 @@ def main():
     
     test_case = [
         '公', '司', '业',
-         #'工商', '出生', '这边', '短期', '超短期',
+        '工商', '出生', '这边', '短期', '超短期',
         '不确定性', '特色旅游']
 
     for word in test_case:
         print(time.ctime())
-        # print(conf(word))
+        print(conf(word))
     
-    # print(conf.get_pinyin_sequence_single_freedom('短期', debug=debug))
+    print(conf.get_pinyin_sequence_single_freedom('短期', debug=debug))
     return conf
 
 
-if __name__ == "__main__":
-    conf = main()
+def test_cos_sim(conf):
     test_words = ['卖', '买', '铁', '铜', '标志', '标识', '登录', '登陆']
-
     tok2emb = conf.load_embeddings(test_words)
     for i in range(8):
         print(test_words[i])
         for j in range(8):
             print(test_words[j], cosine_similarity(tok2emb[test_words[i]], tok2emb[test_words[j]]))
+
+
+if __name__ == "__main__":
+    conf = main()
+    # test_cos_sim(conf)
 
     
     

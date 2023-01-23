@@ -1,4 +1,4 @@
-task=ws_dcn_train_192
+task=wsw5_dcn_train_192
 
 python export_model.py \
   --params_path checkpoints/$task/best_model.pdparams \
