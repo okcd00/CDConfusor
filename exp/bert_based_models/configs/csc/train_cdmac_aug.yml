@@ -1,0 +1,47 @@
+MODEL:
+  BERT_CKPT: "/data/chendian/pretrained_bert_models/chinese-macbert-base/"  # "bert-base-chinese"
+  DEVICE: "cuda"
+  NAME: "cdmac"
+  # switches
+  ENCODER_TYPE: 'pinyin_merged'
+  MERGE_MASK_TYPE: 'gold'  # try again
+  MASK_CONFUSIONS: True  
+  PREDICT_PINYINS: True
+  PREDICT_FAULTY_POSITIONS: True
+  # settings
+  HYPER_PARAMS: [ .5 ]  # w * cor + (1-w) * det  # [loss_coefficient]
+  GPU_IDS: [ 0,1,2,3,4,5,6,7 ]
+  # WEIGHTS: "corrector_ep07.ckpt"
+
+DATASETS:
+  # TRAIN: "/data/chendian/bbcm_datasets/csc_aug/sighan15_train_zs4.220308.json"
+  # VALID: "/data/chendian/bbcm_datasets/csc_aug/sighan15_train_zs4.220308.json"
+  # TRAIN: "/home/chendian/BBCM/datasets/csc_aug/sighan15_test.ct_covered.w.json"
+  # VALID: "/home/chendian/BBCM/datasets/csc_aug/sighan15_test.ct_covered.w.json"
+  # TEST: "/home/chendian/BBCM/datasets/csc_aug/sighan15_test.ct_covered.w.json"
+  # TRAIN: "/home/chendian/BBCM/datasets/csc/train_and_dev.json"
+  TRAIN: "/home/chendian/BBCM/datasets/csc/dcn_train.txt"
+  VALID: "/home/chendian/BBCM/datasets/csc/test.json"
+  TEST: "/home/chendian/BBCM/datasets/csc/test.json"
+
+# ep50_acc1_lr1e-5: train cor-sent f1=83.97
+# ep100_acc4_lr1e-5: train cor-sent f1=83.89
+# ep50_acc1_lr1e-5_singleGPU_nodet:
+# ep50_acc1_lr1e-5_singleGPU_nosim:
+SOLVER:
+  BASE_LR: 1e-5
+  WEIGHT_DECAY: 5e-8
+  BATCH_SIZE: 4
+  MAX_EPOCHS: 32
+  ACCUMULATE_GRAD_BATCHES: 1
+
+DATALOADER:
+  NUM_WORKERS: 8
+
+TEST:
+  BATCH_SIZE: 4
+
+TASK:
+  NAME: "csc"
+
+OUTPUT_DIR: "checkpoints/cdmac_bbcm_pymerged_direct_goldmask_220420"

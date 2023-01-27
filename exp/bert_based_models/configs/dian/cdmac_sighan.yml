@@ -1,0 +1,38 @@
+MODEL:
+  BERT_CKPT: "/data/chendian/pretrained_bert_models/chinese-macbert-base/"  # "bert-base-chinese"  # hfl/chinese-roberta-wwm-ext-large
+  DEVICE: "cuda"
+  NAME: "cdmac"
+  # switches
+  ENCODER_TYPE: 'pinyin_merged'
+  MERGE_MASK_TYPE: 'gold' 
+  SHARE_BERT: False
+  MASK_CONFUSIONS: True  
+  MASK_IGNORE_POS: True
+  PREDICT_PINYINS: True
+  PREDICT_FAULTY_POSITIONS: True
+  # settings
+  HYPER_PARAMS: [ 0.5 ]  # w * cor + (1-w) * det  # [loss_coefficient]
+  GPU_IDS: [ 4,5,6,7 ]
+
+DATASETS:
+  TRAIN: "/data/chendian/cleaned_findoc_samples/autodoc_test.220424.db"
+  VALID: "/data/chendian/cleaned_findoc_samples/autodoc_test.220424.db"
+  TEST: "/data/chendian/cleaned_findoc_samples/autodoc_test.220424.db"
+
+SOLVER:
+  BASE_LR: 1e-5
+  WEIGHT_DECAY: 1e-8
+  BATCH_SIZE: 2
+  MAX_EPOCHS: 10
+  ACCUMULATE_GRAD_BATCHES: 1
+
+DATALOADER:
+  NUM_WORKERS: 4
+
+TEST:
+  BATCH_SIZE: 4
+
+TASK:
+  NAME: "csc"
+
+OUTPUT_DIR: "/data/chendian/confusor_checkpoints/sighan_221124"
