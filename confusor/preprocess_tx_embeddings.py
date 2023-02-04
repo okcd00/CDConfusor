@@ -9,6 +9,7 @@
 #              for boosting confusor
 # ==========================================================================
 import os
+import re
 import opencc
 import pickle
 import pypinyin
@@ -95,18 +96,18 @@ def bucket_by_length(max_length=7):
             print("{} lines, {}-dim embeddings.".format(*items))
             continue
         word = items[0].strip() 
-        if word.isalpha() or word.isdigit():
+        if re.match('^[a-zA-Z0-9\.\-]+$', word):
             ascii_vocab.append(word)
             continue  # pure alphabet or pure number
         if convertor.convert(word) != word:
             tw_vocab.append(word)
-            continue
+            continue  # traditional words
         if len(word) > 1 and len([c for c in word if c in vocab_set]) == 0:
             oov_vocab.append(word)
-            continue 
+            continue  # out-of-BERTvocab
         if len(word) > max_length:
             long_gram_vocab.append(word)
-            continue
+            continue  # too-long-gram
         try:
             vec = list(map(float, items[1:]))
         except Exception as e:
@@ -130,6 +131,6 @@ def bucket_by_length(max_length=7):
 
 
 if __name__ == "__main__":
-    untar()
+    # untar()
     bucket_by_length()
     pass
