@@ -1,5 +1,6 @@
 *.bak
 .vscode/
+.ipynb_checkpoints/
 input_candidates*.json
 spellGraphs.txt
 

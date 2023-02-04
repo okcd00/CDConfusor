@@ -3,7 +3,6 @@
 > A module for generating the word-level (i.e., 1 or more words) confusion-set for a longer phrase.
 
 
-
 ### Overview
 
 **Confusor is a retrieval-based module for the word-level confusion-set generation.** 
@@ -18,7 +17,87 @@ However, the pinyin retrieval step is time-consuming. Three retrieval methods ar
 See `/docs/confset.pdf` for more details.
 
 
+### Usage
+
+#### 1. Preparing
+
+```bash
+# Set the path to the temporary data directory.
+# Select the version of tx_embeddings and download tar-files.
+vim confusor/preprocess_tx_embeddings.py
+
+# Automatically pre-process the embedding files for the confusor.
+python confusor/preprocess_tx_embeddings.py
+
+# more steps for other inter-mediate files.
+TODO
+```
+
+
+#### 2. Initialization
+
+```
+conf = Confusor(method='beam', pinyin_sample_mode='special', token_sample_mode='sort', weight=[1, 0.5, 1])
+```
+
+**Parameters:**
+
+| Param                | Note                              | Option                                 |
+| -------------------- | --------------------------------- | -------------------------------------- |
+| `method`             | pinyin sequence retrieval method. | 'baseline', 'two-stage', 'dcc', 'beam' |
+| `pinyin_sample_mode` | pinyin sequence sampling mode.    | 'sort', 'random', 'special'            |
+| `token_sample_mode`  | word sampling mode.               | 'sort', 'random'                       |
+
+Use `weight` to adjust the weight of the RED score, cosine similarity score and frequency score for a word respectively.
+
+See [confusor.py](confusor/confusor_v2.py) for more details.
+
+
+#### 3. Call the Confusor!
+
+```
+conf('世界')
+```
+
+Then you can get the confusion-set of size 10 as follows:
+
+```
+['实际', '视界', '世纪', '世届', '十届', '十界', '视觉', '事界', '四届', '时节']
+```
+
+### Datasets
+
+Datasets come form this [repo](https://github.com/anonymous/realworld_chinese_typos), will be published soon after anonymous phase.
++ `.tsv` for datasets with pair-wise sentences: 
+  + train and test: `<error_sentence>\t<correct_sentence>`
++ `.dcn.txt` for datasets with DCN-form: (tokens are separated by blanks)
+  + train: `(pid=test-01)\t<error_sentence>\t<correct_sentence>\t<attention_ids>\t<pinyin_ids_for_err>`
+  + test: `(pid=test-01)\t<error_sentence>`
++ `.sighan.txt.` for datasets with SIGHAN-form:
+  + test: `(pid=test-01)\t<error_sentence>`
+
+
+### Resources
+> Uploading...
+
++ Trained model files
+  + TODO.
++ Embeddings for 12 million n-grams
+  + from the released [tencent embedding](https://ai.tencent.com/ailab/nlp/en/embedding.html)
++ Src for IME
+  + the mapping dict for pinyin candidates [here](data/input_candidates.google.json)
+  + the mapping dict for pinyin-similar relations [here](data/pinyin_mapping.json)
+  + the char-level confusion set from @ACL2020SpellGCN/[SpellGCN](https://github.com/ACL2020SpellGCN/SpellGCN) for this [paper](https://doi.org/10.18653/v1/2020.acl-main.81)
++ Datasets
+  + check [DCN](exp/data/cn/Wang271k/) dataset at @destwang/[DCN](https://github.com/destwang/DCN).
+  + check [CCTC](exp/data/cn/cctc/) dataset at @destwang/[CTCResources](https://github.com/destwang/CTCResources)
+  + we release half of the RFD dataset [here](exp/data/cn/findoc/) in this repo, the rest samples are waiting for desensitization.
+  + this [paper](https://doi.org/10.18653/v1/P19-1578) also proposed a char-level confusion set (not used in our work, later.)
+
+
 ### Base Models
+> For evaluating the performance, this repo also re-produce several top-rated CSC models.
+
 
 #### DCN
 > Among the CSC models without pretraining on external corpus, [**DCN**](exp/dcn/README.md) is the top CSC model using dynamic connections between candidates on adjacent tokens.           
@@ -182,66 +261,3 @@ CUDA_VISIBLE_DEVICES=6 python train.py \
 ```bash
 # TODO
 ```
-
-### Datasets
-
-Datasets come form this [repo](https://github.com/anonymous/realworld_chinese_typos), will be published soon after anonymous phase.
-+ `.tsv` for datasets with pair-wise sentences: 
-  + train and test: `<error_sentence>\t<correct_sentence>`
-+ `.dcn.txt` for datasets with DCN-form: (tokens are separated by blanks)
-  + train: `(pid=test-01)\t<error_sentence>\t<correct_sentence>\t<attention_ids>\t<pinyin_ids_for_err>`
-  + test: `(pid=test-01)\t<error_sentence>`
-+ `.sighan.txt.` for datasets with SIGHAN-form:
-  + test: `(pid=test-01)\t<error_sentence>`
-
-### Resources
-> Uploading...
-
-+ Trained model files
-  + TODO.
-+ Embeddings for 12 million n-grams
-  + from the released [tencent embedding](https://ai.tencent.com/ailab/nlp/en/embedding.html)
-+ Src for IME
-  + the mapping dict for pinyin candidates [here](data/input_candidates.google.json)
-  + the mapping dict for pinyin-similar relations [here](data/pinyin_mapping.json)
-  + the char-level confusion set from @ACL2020SpellGCN/[SpellGCN](https://github.com/ACL2020SpellGCN/SpellGCN) for this [paper](https://doi.org/10.18653/v1/2020.acl-main.81)
-+ Datasets
-  + check [DCN](exp/data/cn/Wang271k/) dataset at @destwang/[DCN](https://github.com/destwang/DCN).
-  + check [CCTC](exp/data/cn/cctc/) dataset at @destwang/[CTCResources](https://github.com/destwang/CTCResources)
-  + we release half of the RFD dataset [here](exp/data/cn/findoc/) in this repo, the rest samples are waiting for desensitization.
-  + this [paper](https://doi.org/10.18653/v1/P19-1578) also proposed a char-level confusion set (not used in our work, later.)
-
-### Usage
-
-#### 1. Initialization
-
-```
-conf = Confusor(method='beam', pinyin_sample_mode='special', token_sample_mode='sort', weight=[1, 0.5, 1])
-```
-
-**Parameters:**
-
-| Param                | Note                              | Option                                 |
-| -------------------- | --------------------------------- | -------------------------------------- |
-| `method`             | pinyin sequence retrieval method. | 'baseline', 'two-stage', 'dcc', 'beam' |
-| `pinyin_sample_mode` | pinyin sequence sampling mode.    | 'sort', 'random', 'special'            |
-| `token_sample_mode`  | word sampling mode.               | 'sort', 'random'                       |
-
-Use `weight` to adjust the weight of the RED score, cosine similarity score and frequency score for a word respectively.
-
-See `/bbcm/data/loaders/confusor.py` for more details.
-
-
-
-#### 2. Call the Confusor!
-
-```
-conf('世界')
-```
-
-Then you can get the confusion-set of size 10 as follows:
-
-```
-['实际', '视界', '世纪', '世届', '十届', '十界', '视觉', '事界', '四届', '时节']
-```
-
