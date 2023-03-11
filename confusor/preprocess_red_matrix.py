@@ -8,13 +8,19 @@
 #   desc     : generate intermediate files
 #              for boosting confusor
 # ==========================================================================
+import os
 import copy
 import string
+import pickle
 import numpy as np
 
 # PATH (path to custom-files)
 REPO_DIR = '/home/chendian/CDConfusor'
 CONFUSOR_DATA_DIR = '/data/chendian/CDConfusor/'
+SCORE_DATA_DIR = CONFUSOR_DATA_DIR + 'score_data/'  # for dumping score matrix
+
+if not os.path.exists(SCORE_DATA_DIR):
+    os.system(f"mkdir -p {SCORE_DATA_DIR}")
 
 # for other functions' calling
 CHAR_PY_VOCAB_PATH = f"{REPO_DIR}/data/vocab_pinyin.txt"
@@ -81,7 +87,7 @@ def apply_mat(target_mat, mat_data, score):
     return target_mat
 
 
-def generate_score_matrix(amb_data, amb_score, ins_data, ins_score):
+def generate_score_matrix(amb_data, amb_score, ins_rep_mat, ins_rep_score):
     del_matrix = [[1 for _ in range(27)] for _ in range(27)]
     rep_matrix = copy.deepcopy(del_matrix)
     for i in range(27):
@@ -90,7 +96,7 @@ def generate_score_matrix(amb_data, amb_score, ins_data, ins_score):
                 rep_matrix[i][j] = 0
     del_matrix = apply_mat(del_matrix, amb_data['del_mat'], amb_score)
     rep_matrix = apply_mat(rep_matrix, amb_data['rep_mat'], amb_score)
-    rep_matrix = apply_mat(rep_matrix, ins_data, ins_score)
+    rep_matrix = apply_mat(rep_matrix, ins_rep_mat, ins_rep_score)
     return del_matrix, rep_matrix
 
 
@@ -189,7 +195,7 @@ def uniform_sample(cand_score_pair, num):
 def calculate_red_matrix(score_matrix, method='char'):
     # calculate red-score between char-level pinyins.
     if 'char' in method:
-        char_pinyin_case = [line.strip() for line in open(f"{CHAR_PY_VOCAB_PATH}", "r")]
+        char_pinyin_case = [line.strip() for line in open(f"{CHAR_PY_VOCAB_PATH}", "r") if not line.startswith('[')]
         char_red_matrix = {}
         for first_py in char_pinyin_case:
             for second_py in char_pinyin_case:
@@ -211,9 +217,22 @@ def calculate_red_matrix(score_matrix, method='char'):
     raise ValueError(f"Invalid method: {method}, should be in [char|init]")
 
 
-if __name__ == "__main__":
+def main():
+    amb_data = dict(
+        del_mat=amb_del_mat, 
+        rep_mat=amb_rep_mat)    
     score_matrix = generate_score_matrix(
-        amb_data=dict(del_mat=amb_del_mat, rep_mat=amb_rep_mat), 
-        amb_score=0.5, ins_rep_mat=ins_rep_mat, ins_rep_score=0.25)
-    char_red_matrix = calculate_red_matrix(score_matrix, method='char')
+        amb_data=amb_data, 
+        amb_score=0.5, 
+        ins_rep_mat=ins_rep_mat, 
+        ins_rep_score=0.25)
+    char_red_matrix = calculate_red_matrix(
+        score_matrix, method='char')
+    pickle.dump(amb_data, open(SCORE_DATA_DIR + 'amb_data.pkl', 'wb'))
+    pickle.dump(ins_rep_mat, open(SCORE_DATA_DIR + 'inp_data.pkl', 'wb'))
+    pickle.dump(char_red_matrix, open(SCORE_DATA_DIR + 'red_data.pkl', 'wb'))
+
+
+if __name__ == "__main__":
+    main()
     pass

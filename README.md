@@ -21,17 +21,17 @@ See `/docs/confset.pdf` for more details.
 
 #### 1. Preparing
 
-```bash
-# Set the path to the temporary data directory.
-# Select the version of tx_embeddings and download tar-files.
-vim confusor/preprocess_tx_embeddings.py
-
-# Automatically pre-process the embedding files for the confusor.
-python confusor/preprocess_tx_embeddings.py
-
-# more steps for other inter-mediate files.
-TODO
-```
++ Set the path to the temporary data directory.
+  + in `confusor/preprocess_tx_embeddings.py`
++ Select the version of tx_embeddings and download tar-files.
+  + call `untar()` in `confusor/preprocess_tx_embeddings.py`
+  + a new directory called `tx_embddings` will be created
++ Call the script to generate bucketing corpus-file by word-length.
+  + call `bucket_by_length()` in `confusor/preprocess_tx_embeddings.py`
++ Call the script to generate scores for `input_sequence`
+  + call `main()` in `confusor/preprocess_red_matrix.py`
+  + a new directory called `score_data` will be created
++ TODO: more steps for other inter-mediate files.
 
 
 #### 2. Initialization
