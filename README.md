@@ -21,16 +21,21 @@ See `/docs/confset.pdf` for more details.
 
 #### 1. Preparing
 
-+ Set the path to the temporary data directory.
-  + in `confusor/preprocess_tx_embeddings.py`
-+ Select the version of tx_embeddings and download tar-files.
++ Set the path to the repo/data directory in `paths.py`.
+  + `REPO_DIR = '/home/chendian/CDConfusor'`
+  + `CONFUSOR_DATA_DIR = '/data/chendian/CDConfusor/'`
++ Select the version of tx_embeddings and download tar-files in `paths.py`.
+  + `FILE_VERSION = "d200-v0.2.0"`
   + call `untar()` in `confusor/preprocess_tx_embeddings.py`
-  + a new directory called `tx_embddings` will be created
+  + a new directory `$CONFUSOR_DATA_DIR/tx_embeddings` will be created.
 + Call the script to generate bucketing corpus-file by word-length.
   + call `bucket_by_length()` in `confusor/preprocess_tx_embeddings.py`
+    + `$CONFUSOR_DATA_DIR/tx_embeddings/*gram.pkl` will be created.
 + Call the script to generate scores for `input_sequence`
   + call `main()` in `confusor/preprocess_red_matrix.py`
-  + a new directory called `score_data` will be created
+    + set pre-defined weights for calculating RED (Refined Edit-Distance) in `main()`.
+    + a new directory called `$CONFUSOR_DATA_DIR/score_data` will be created.
+    + in this dir, a file called `red_score.info` will be created to record the weights.
 + TODO: more steps for other inter-mediate files.
 
 

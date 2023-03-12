@@ -9,66 +9,28 @@
 #              for boosting confusor
 # ==========================================================================
 import os
+import sys
+sys.path.append('./')
+sys.path.append('../')
 import copy
 import string
 import pickle
 import numpy as np
 
 # PATH (path to custom-files)
-REPO_DIR = '/home/chendian/CDConfusor'
-CONFUSOR_DATA_DIR = '/data/chendian/CDConfusor/'
-SCORE_DATA_DIR = CONFUSOR_DATA_DIR + 'score_data/'  # for dumping score matrix
+from paths import (
+    SCORE_DATA_DIR,
+    CHAR_PY_VOCAB_PATH
+)
+
+# Predefined matrix
+from src.confusor_utils import (
+    char_id, amb_del_mat, amb_rep_mat, ins_rep_mat
+)
+
 
 if not os.path.exists(SCORE_DATA_DIR):
     os.system(f"mkdir -p {SCORE_DATA_DIR}")
-
-# for other functions' calling
-CHAR_PY_VOCAB_PATH = f"{REPO_DIR}/data/vocab_pinyin.txt"
-
-# deletion matrix
-amb_del_mat = {
-    'h': ['z', 'c', 's'],
-    'g': ['n']}
-
-# replacement matrix
-amb_rep_mat = {
-    'l': ['r', 'n'],
-    'n': ['l'],
-    'r': ['l'],
-    'f': ['h'],
-    'h': ['f']}
-
-# insert/replacement matrix
-ins_rep_mat = {}
-keyboard_distance = {}
-offset = [  # six-direction distrub
-    (-1, 0), (-1, 1),
-    (0, -1), (0, 1),
-    (1, 0), (1, 1)]
-
-# keyboard distribution
-# target = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
-CONFUSOR_KEYBOARD_DATA = [
-    '            ',
-    ' qwertyuiop ',
-    ' asdfghjkl  ',
-    '  zxcvbnm   ',
-    '            ',]
-for r, line in enumerate(CONFUSOR_KEYBOARD_DATA):
-    for c, key in enumerate(line):
-        if key == ' ':
-            continue
-        around = []
-        keyboard_distance[(key, key)] = 0
-        for r_off, c_off in offset:
-            other_key = CONFUSOR_KEYBOARD_DATA[r+r_off][c+c_off]
-            if other_key == ' ':
-                continue
-            keyboard_distance[(key, other_key)] = 1
-            around.append(other_key)
-        ins_rep_mat[key] = around
-char_id = {z: i for i, z in enumerate(list(string.ascii_lowercase))}
-char_id['0'] = 26
 
 
 def char_to_id(zimu):
@@ -87,15 +49,15 @@ def apply_mat(target_mat, mat_data, score):
     return target_mat
 
 
-def generate_score_matrix(amb_data, amb_score, ins_rep_mat, ins_rep_score):
+def generate_score_matrix(amb_score, ins_rep_score):
     del_matrix = [[1 for _ in range(27)] for _ in range(27)]
     rep_matrix = copy.deepcopy(del_matrix)
     for i in range(27):
         for j in range(27):
             if i == j or i == 26 or j == 26:
                 rep_matrix[i][j] = 0
-    del_matrix = apply_mat(del_matrix, amb_data['del_mat'], amb_score)
-    rep_matrix = apply_mat(rep_matrix, amb_data['rep_mat'], amb_score)
+    del_matrix = apply_mat(del_matrix, amb_del_mat, amb_score)
+    rep_matrix = apply_mat(rep_matrix, amb_rep_mat, amb_score)
     rep_matrix = apply_mat(rep_matrix, ins_rep_mat, ins_rep_score)
     return del_matrix, rep_matrix
 
@@ -217,20 +179,24 @@ def calculate_red_matrix(score_matrix, method='char'):
     raise ValueError(f"Invalid method: {method}, should be in [char|init]")
 
 
-def main():
+def dump_mat_files():
     amb_data = dict(
         del_mat=amb_del_mat, 
-        rep_mat=amb_rep_mat)    
+        rep_mat=amb_rep_mat) 
+    pickle.dump(amb_data, open(SCORE_DATA_DIR + 'amb_data.pkl', 'wb'))
+    pickle.dump(ins_rep_mat, open(SCORE_DATA_DIR + 'ins_rep_mat.pkl', 'wb'))
+
+
+def main(amb_score=0.5, ins_rep_score=0.25):
     score_matrix = generate_score_matrix(
-        amb_data=amb_data, 
-        amb_score=0.5, 
+        amb_score=amb_score, 
         ins_rep_mat=ins_rep_mat, 
-        ins_rep_score=0.25)
+        ins_rep_score=ins_rep_score)
     char_red_matrix = calculate_red_matrix(
         score_matrix, method='char')
-    pickle.dump(amb_data, open(SCORE_DATA_DIR + 'amb_data.pkl', 'wb'))
-    pickle.dump(ins_rep_mat, open(SCORE_DATA_DIR + 'inp_data.pkl', 'wb'))
     pickle.dump(char_red_matrix, open(SCORE_DATA_DIR + 'red_data.pkl', 'wb'))
+    with open(SCORE_DATA_DIR + 'red_data.info', 'w') as f:
+        f.write("amb_score = {amb_score}\nins_rep_score = {ins_rep_score}\n")
 
 
 if __name__ == "__main__":

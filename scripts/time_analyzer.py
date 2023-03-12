@@ -1,7 +1,7 @@
 import sys
 sys.path.append("../")
 
-from confusor import Confusor
+from src import Confusor
 from tqdm import tqdm
 import json
 

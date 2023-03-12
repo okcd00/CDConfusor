@@ -2,13 +2,15 @@
 @Time   :   2021-01-21 10:39:23
 @File   :   file_io.py
 @Author :   Abtion
-@Email  :   abtion{at}outlook.com
+@Feat   :   okcd00
+@Email  :   abtion{at}outlook.com, okcd00{at}qq.com
 """
 import os
 import sys
 import json
 import time
 import errno
+import pickle
 import shutil
 import logging
 from collections import OrderedDict
@@ -539,6 +541,18 @@ def dump_json(obj, fp, debug=False):
         if debug:
             print(f'json文件{obj}保存失败, {e}')
         return False
+
+
+
+def load_pkl(fp):
+    start_time = time.time()
+    print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+    if not os.path.exists(fp):
+        print("Failed for file-not-existed.")
+        return None
+    ret = pickle.load(open(fp, 'rb'))
+    print(f"cost {round(time.time() - start_time, 3)} seconds.")
+    return pickle.load(open(fp, 'rb'))
 
 
 def get_main_dir():

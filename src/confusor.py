@@ -19,7 +19,7 @@ import numpy as np
 from pprint import pprint
 from itertools import product
 from utils import edit_distance
-from utils.file_io import get_filesize
+from utils.file_io import load_pkl
 from utils.pinyin_utils import PinyinUtils
 from utils.confuser_utils import (
     generate_score_matrix,
@@ -133,6 +133,7 @@ class Confusor(object):
         self.external_word_set = {}
 
         # self.load_sighan_confusion_set()
+        self.load_pickle = load_pkl
         self.load_word_confusion_set()
 
         # pinyin2token corpus
@@ -240,16 +241,6 @@ class Confusor(object):
         self.score_matrix = generate_score_matrix(
             amb_data, self.amb_score, inp_data, self.inp_score)
         return self.score_matrix
-
-    def load_pickle(self, fp):
-        start_time = time.time()
-        print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
-        if not os.path.exists(fp):
-            print("Failed")
-            return None
-        ret = pickle.load(open(fp, 'rb'))
-        print(f"cost {round(time.time() - start_time, 3)} seconds.")
-        return ret
 
     def load_embeddings(self, tokens):
         """

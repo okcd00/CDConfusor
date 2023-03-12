@@ -15,24 +15,12 @@ import pickle
 import pypinyin
 import numpy as np
 from tqdm import tqdm
+from paths import (
+    REPO_DIR, CONFUSOR_DATA_DIR,
+    TX_PREFIX, FILE_VERSION, TX_DIR,  # for untar.
+    EMBEDDING_PATH  # for embedding bucketing.
+)
 
-# PATH (path to custom-files)
-REPO_DIR = '/home/chendian/CDConfusor'
-CONFUSOR_DATA_DIR = '/data/chendian/CDConfusor/'
-
-# https://ai.tencent.com/ailab/nlp/en/download.html
-# d100-v0.2.0-s (vocab=2M, tar_size=0.8G, size=1.8G)
-# d200-v0.2.0-s (vocab=2M, tar_size=1.5G, size=3.6G)
-# d100-v0.2.0 (vocab=12M, tar_size=4.7G, size=12G)
-# d200-v0.2.0 (vocab=12M, tar_size=9.0G, size=22G)
-FILE_VERSION = "d200-v0.2.0"
-TX_DIR = "tx_embeddings"
-TX_PREFIX = "tencent-ailab-embedding-zh-"
-TX_EMBEDDING_PATH = f"{CONFUSOR_DATA_DIR}/{TX_PREFIX}{FILE_VERSION}"
-
-# for other functions' calling
-VOCAB_PATH = f"{REPO_DIR}/data/vocab.txt"
-EMBEDDING_PATH = f"{CONFUSOR_DATA_DIR}/{TX_DIR}/"
 
 # other resources
 CONFUSOR_KEYBOARD_DATA = [

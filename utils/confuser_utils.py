@@ -4,7 +4,6 @@ import numpy as np
 from tqdm import tqdm
 from string import ascii_lowercase
 
-
 zimu2inds = {z: i for i, z in enumerate(list(ascii_lowercase))}
 zimu2inds['0'] = 26
 
@@ -89,35 +88,7 @@ def bow_similarity_filtering_new(pinyin, pinyin_corpus, cand_num=10000):
     return [p[0] for p in sort_cand[:cand_num]]
 
 
-def generate_score_matrix(amb_data, amb_score, inp_data, inp_score):
-    """
-    Generate score matrices from pkl files.
-    :param amb_data:
-    :param amb_score:
-    :param inp_data:
-    :param inp_score:
-    :return:
-    """
-    def apply_mat(target_mat, mat_data, score):
-        for firz, dellist in mat_data.items():
-            for secz in dellist:
-                i = zimu2ind(firz)
-                j = zimu2ind(secz)
-                target_mat[i][j] -= score
-        return target_mat
-    del_matrix = [[1 for _ in range(27)] for _ in range(27)]
-    rep_matrix = copy.deepcopy(del_matrix)
-    for i in range(27):
-        for j in range(27):
-            if i == j or i == 26 or j == 26:
-                rep_matrix[i][j] = 0
-    del_matrix = apply_mat(del_matrix, amb_data['del_mat'], amb_score)
-    rep_matrix = apply_mat(rep_matrix, amb_data['rep_mat'], amb_score)
-    rep_matrix = apply_mat(rep_matrix, inp_data, inp_score)
-    return del_matrix, rep_matrix
-
-
-def refined_edit_distance(str1, str2, score_matrix):
+def refined_edit_distance(str1, str2, score_matrix, rate=False):
     """
     Given two sequences, return the refined edit distance normalized by the max length.
     """
@@ -136,10 +107,13 @@ def refined_edit_distance(str1, str2, score_matrix):
             # 在a后插入b_j
             ins_score = del_matrix[ind_j1][zimu2ind(pstr2)]
 
-            matrix[i][j] = min(matrix[i - 1][j] + del_score, matrix[i][j - 1] + ins_score,
+            matrix[i][j] = min(matrix[i - 1][j] + del_score, 
+                               matrix[i][j - 1] + ins_score,
                                matrix[i - 1][j - 1] + rep_score)
             # return matrix
-    return matrix[len(str1)][len(str2)] / max([len(str1), len(str2)])
+    if rate:
+        return matrix[len(str1)][len(str2)] / max([len(str1), len(str2)])
+    return matrix[len(str1)][len(str2)]
 
 
 def cosine_similarity(v1, v2):
