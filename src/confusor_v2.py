@@ -36,15 +36,15 @@ from utils import (
     is_pure_chinese_phrase,
     load_pkl)
 from src.confusor_utils import (
+    char2idx, 
     refined_edit_distance,
-    char_id, amb_del_mat, amb_rep_mat, ins_rep_mat
+    amb_del_mat, amb_rep_mat, ins_rep_mat
 )
 
 
 class Confusor(object):
     PUNC_LIST = "，；。？！…"
 
-    FIRST_PINYIN_PENALTY = 0.05
     def __init__(self):
         # for debugging
         self.debug = True
@@ -52,7 +52,10 @@ class Confusor(object):
 
         # data loader
         self._load_confusor_data()
-    
+
+        # cache for faster function call
+        self.red_score_cache = {}
+        
     def _load_confusor_data(self):
         # load char-level REDscore matrix
         self.red_score = load_pkl(to_path(SCORE_DATA_DIR, 'red_data.pkl'))
@@ -106,6 +109,11 @@ class Confusor(object):
         return []
 
     def refined_edit_distance(self, seq1, seq2):
+        """
+        @param seq1: a list of pinyin strings
+        @param seq2: a list of pinyin strings
+        @return: the red score of the two sequences
+        """
         return refined_edit_distance(
             seq1, seq2, self.del_matrix, self.rep_matrix)
 

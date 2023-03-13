@@ -25,7 +25,8 @@ from paths import (
 
 # Predefined matrix
 from src.confusor_utils import (
-    char_id, amb_del_mat, amb_rep_mat, ins_rep_mat
+    char2idx, 
+    amb_del_mat, amb_rep_mat, ins_rep_mat
 )
 
 
@@ -33,18 +34,11 @@ if not os.path.exists(SCORE_DATA_DIR):
     os.system(f"mkdir -p {SCORE_DATA_DIR}")
 
 
-def char_to_id(zimu):
-    """
-    '0' for the start of the sequence. Only applied in del_matrix.
-    """
-    return char_id[zimu]
-
-
 def apply_mat(target_mat, mat_data, score):
     for firz, del_list in mat_data.items():
         for secz in del_list:
-            i = char_to_id(firz)
-            j = char_to_id(secz)
+            i = char2idx(firz)
+            j = char2idx(secz)
             target_mat[i][j] -= score
     return target_mat
 
@@ -70,16 +64,16 @@ def refined_edit_distance(str1, str2, score_matrix):
     matrix = [[i + j for j in range(len(str2) + 1)] for i in range(len(str1) + 1)]
     for i in range(1, len(str1) + 1):
         for j in range(1, len(str2) + 1):
-            ind_i1 = char_to_id(str1[i - 1])
-            ind_j1 = char_to_id(str2[j - 1])
+            ind_i1 = char2idx(str1[i - 1])
+            ind_j1 = char2idx(str2[j - 1])
             rep_score = rep_matrix[ind_i1][ind_j1]
             pstr1 = '0' if i == 1 else str1[i - 2]
             pstr2 = '0' if j == 1 else str2[j - 2]
             # 删除a_i
-            del_score = del_matrix[ind_i1][char_to_id(pstr1)]
+            del_score = del_matrix[ind_i1][char2idx(pstr1)]
 
             # 在a后插入b_j
-            ins_score = del_matrix[ind_j1][char_to_id(pstr2)]
+            ins_score = del_matrix[ind_j1][char2idx(pstr2)]
 
             matrix[i][j] = min(matrix[i - 1][j] + del_score, 
                                matrix[i][j - 1] + ins_score,
@@ -188,9 +182,9 @@ def dump_mat_files():
 
 
 def main(amb_score=0.5, ins_rep_score=0.25):
+    dump_mat_files()
     score_matrix = generate_score_matrix(
         amb_score=amb_score, 
-        ins_rep_mat=ins_rep_mat, 
         ins_rep_score=ins_rep_score)
     char_red_matrix = calculate_red_matrix(
         score_matrix, method='char')

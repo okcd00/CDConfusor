@@ -22,16 +22,6 @@ from paths import (
 )
 
 
-# other resources
-CONFUSOR_KEYBOARD_DATA = [
-    '            ',
-    ' qwertyuiop ',
-    ' asdfghjkl  ',
-    '  zxcvbnm   ',
-    '            ',
-]
-
-
 def untar():
     # the tar.gz file should be put in CONFUSOR_DATA_DIR
     ret = os.system(
