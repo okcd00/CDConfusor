@@ -3,7 +3,7 @@ sys.path.append("../")
 
 import json
 from tqdm import tqdm
-from confusor import Confusor
+from src import Confusor
 
 SAVEPATH = '/data/pangchaoxu/tencent_embedding/test_data/'
 

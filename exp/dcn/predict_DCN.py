@@ -23,6 +23,7 @@ using a masked language modeling (MLM) loss.
 import logging
 import math
 import os
+from tqdm import tqdm
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -137,12 +138,24 @@ class DataTrainingArguments:
 
 
 
-def load_dataset(path, index=1):
+def load_dataset(path, index=1, format='sighan'):
     input_lines = []
     with open(path) as f:
         for line in f:
-            items = line.split('\t')
-            input_lines.append(items[index].strip())
+            if format in ['sighan']:
+                # (pid=rw-0)	公司有一只高素质管理团队，利用计算机网络、ＧＰＳ卫星定位系统，实现了公司智能化运营管理。
+                items = line.split('\t')
+                input_lines.append(items[1].strip())
+            elif format in ['tsv']:
+                # 公司有一只高素质管理团队,利用计算机网络、gps卫星定位系统,实现了公司智能化运营管理。	公司有一支高素质管理团队,利用计算机网络、gps卫星定位系统,实现了公司智能化运营管理。
+                items = line.split('\t')
+                input_lines.append(items[0].strip())
+            elif format in ['dcn']:
+                # 公 司 有 一 只 高 素 质 管 理 团 队 ， 利 用 计 算 机 网 络 、 ｇ ##ｐ ##ｓ 卫 星 定 位 系 统 ， 实 现 了 公 司 智 能 化 运 营 管 理 。	公 司 有 一 支 高 素 质 管 理 团 队 ， 利 用 计 算 机 网 络 、 ｇ ##ｐ ##ｓ 卫 星 定 位 系 统 ， 实 现 了 公 司 智 能 化 运 营 管 理 。	1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1	98 302 362 357 384 93 305 384 103 167 325 73 0 167 361 127 306 127 332 181 0 0 0 0 333 345 67 333 338 322 0 292 340 164 98 302 384 212 120 366 359 103 167 0
+                items = line.split('\t')
+                input_lines.append(''.join(items[0].strip().split(' ')))
+            elif format in ['pure_text']:
+                input_lines.append(line.strip())
     return input_lines
 
 
@@ -150,7 +163,7 @@ def main():
     parser = HfArgumentParser(
         (ModelArguments, DataTrainingArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
-
+    # print(model_args, data_args)
 
     # Load pretrained model and tokenizer
     #
@@ -160,7 +173,8 @@ def main():
 
     if model_args.config_name:
         config = AutoConfig.from_pretrained(
-            model_args.config_name, cache_dir=model_args.cache_dir)
+            model_args.config_name, 
+            cache_dir=model_args.cache_dir)
     elif model_args.model:
         config = AutoConfig.from_pretrained(
             model_args.model)
@@ -169,8 +183,9 @@ def main():
         logger.warning(
             "You are instantiating a new config instance from scratch.")
 
-    tokenizer = DcnTokenizer(os.path.join(model_args.model, 'vocab.txt'), 
-                             os.path.join(model_args.model, '..', 'pinyin_vocab.txt'))
+    tokenizer = DcnTokenizer(
+        os.path.join(model_args.model, 'vocab.txt'), 
+        os.path.join(model_args.model, '..', '..', 'vocab', 'pinyin_vocab.txt'))
 
     if model_args.model:
         model = DCNForMaskedLM.from_pretrained(
@@ -189,25 +204,36 @@ def main():
         data_args.max_len = min(data_args.max_len, tokenizer.max_len)
 
     # Get datasets
-    input_lines = load_dataset(data_args.input_file, index=int(data_args.text_tab_index))
+    input_lines = load_dataset(
+        data_args.input_file, 
+        index=int(data_args.text_tab_index),
+        format='sighan',
+    )
 
-    # Predicting
+    # Predict
     results = result_predict(input_lines, tokenizer, model, 'cuda',
                              batch_size=data_args.batch_size, 
                              max_seq_length=data_args.max_len)
-        
+    
+    # Format
+    formatted_outputs = []
+    for inp, res in zip(input_lines, results):
+        blank_indexes = []
+        if '　' in inp:
+            blank_indexes = [i for i, c in enumerate(inp) if c == '　']
+        res = [c[2:].upper() if c.startswith('##') else c.upper() for c in res]
+        if blank_indexes:
+            for idx in blank_indexes:
+                res.insert(idx, '　')
+        line = ''.join(res)
+        line = line[:len(inp)]
+        formatted_outputs.append(line)
+
+    # Dump to file
     with open(data_args.output_file, 'w') as f:
-        for inp, res in zip(input_lines, results):
-            blank_indexes = []
-            if '　' in inp:
-                blank_indexes = [i for i, c in enumerate(inp) if c == '　']
-            res = [c[2:].upper() if c.startswith('##') else c.upper() for c in res]
-            if blank_indexes:
-                for idx in blank_indexes:
-                    res.insert(idx, '　')
-            line = ''.join(res)
-            line = line[:len(inp)]
+        for line in formatted_outputs:
             print(line, file=f)
+
     return results
 
 
@@ -240,7 +266,7 @@ def result_predict(sentence_list, tokenizer, model, device, batch_size=50, max_s
     result = []
     result_prob = []
     i = 0
-    for input_ids, input_mask, segment_ids, pinyin_ids in eval_dataloader:
+    for input_ids, input_mask, segment_ids, pinyin_ids in tqdm(eval_dataloader):
         i += 1
         input_ids = input_ids.to(device)
         input_mask = input_mask.to(device)
@@ -253,7 +279,9 @@ def result_predict(sentence_list, tokenizer, model, device, batch_size=50, max_s
         preds = logits.detach().cpu().numpy()
         result.extend(preds.tolist())
 
-    labels = [tokenizer.convert_ids_to_tokens(r)[1:len(sentence_list[idx]) + 1] for idx, r in enumerate(result)]
+    # remove [CLS] and [SEP]/[PAD]
+    labels = [tokenizer.convert_ids_to_tokens(r)[1:len(sentence_list[idx])]  # + 1] 
+              for idx, r in enumerate(result)]
     return labels
 
 

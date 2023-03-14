@@ -118,9 +118,9 @@ class DataTrainingArguments:
         default=False, metadata={"help": "Train with masked-language modeling loss instead of language modeling."}
     )
 
-    #do_pred: bool = field(
-        #default=False, metadata={"help": "do predict"}
-    #)
+    do_pred: bool = field(
+        default=False, metadata={"help": "do predict"}
+    )
 
     mlm_probability: float = field(
         default=0.15, metadata={"help": "Ratio of tokens to mask for masked language modeling loss"}
@@ -254,13 +254,15 @@ def main():
     # Get datasets
 
     train_dataset = get_dataset(
-        data_args, tokenizer=tokenizer, shuffle=True) if training_args.do_train else None
+        data_args, tokenizer=tokenizer, shuffle=True) \
+        if training_args.do_train else None
     eval_dataset = get_dataset(
         data_args, tokenizer=tokenizer, evaluate=True, shuffle=False) \
         if training_args.do_eval or training_args.do_predict else None
 
     data_collator = DataCollatorForPinyinIndexLanguageModeling(
-        tokenizer=tokenizer, mlm=data_args.mlm, mlm_probability=data_args.mlm_probability
+        tokenizer=tokenizer, mlm=data_args.mlm, 
+        mlm_probability=data_args.mlm_probability
     )
 
     # Initialize our Trainer
@@ -294,7 +296,6 @@ def main():
         logger.info("*** Evaluate ***")
 
         eval_output = trainer.evaluate()
-
         perplexity = math.exp(eval_output["eval_loss"])
         result = {"perplexity": perplexity}
 
@@ -306,13 +307,16 @@ def main():
                 for key in sorted(result.keys()):
                     logger.info("  %s = %s", key, str(result[key]))
                     writer.write("%s = %s\n" % (key, str(result[key])))
-
         results.update(result)
 
-    """
     if training_args.do_predict:
-        trainer.evaluate_sighan()
-    """
+        # trainer.evaluate_sighan()
+        from .inference import Inference
+        instance = Inference(model_path=training_args.output_dir)
+        if data_args.test_file.endswith('.dcn.txt'):
+            instance.evaluate_on_dcn_file(data_args.test_file)
+        elif data_args.test_file.endswith('.tsv'):
+            instance.evaluate_on_tsv(data_args.test_file)
     return results
 
 

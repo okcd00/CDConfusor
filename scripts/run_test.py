@@ -1,3 +1,5 @@
+# A temp file for running scripts in tmux.
+
 import sys
 sys.path.append("../")
 
@@ -16,7 +18,7 @@ print("Init SQLite Ends.", time.time() - start_time)
 print("The first sample is:", dataset[0], dataset['[UNK]'])
 
 
-from confusor.confusor import default_confusor
+from src.confusor import default_confusor
 cfs = default_confusor()
 cfs.debug = False
 cfs.keep_num = 1000
