@@ -299,18 +299,23 @@ class Trainer:
         large_lr = ["transition"]
         optimizer_grouped_parameters = [
             {
-                "params": [p for n, p in self.model.named_parameters() if not any(nd in n for nd in no_decay)],
+                "params": [p for n, p in self.model.named_parameters() 
+                           if not any(nd in n for nd in no_decay)],
                 "weight_decay": self.args.weight_decay,
             },
             {
-                "params": [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)],
+                "params": [p for n, p in self.model.named_parameters() 
+                           if any(nd in n for nd in no_decay)],
                 "weight_decay": 0.0,
             },
         ]
 
-        optimizer = AdamW(optimizer_grouped_parameters, lr=self.args.learning_rate, eps=self.args.adam_epsilon)
+        optimizer = AdamW(optimizer_grouped_parameters, 
+                          lr=self.args.learning_rate, 
+                          eps=self.args.adam_epsilon)
         scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=self.args.warmup_steps, num_training_steps=num_training_steps, min_lr=self.args.min_lr
+            optimizer, num_warmup_steps=self.args.warmup_steps, 
+            num_training_steps=num_training_steps, min_lr=self.args.min_lr
         )
         return optimizer, scheduler
 
@@ -376,7 +381,8 @@ class Trainer:
         ):
             # Load in optimizer and scheduler states
             optimizer.load_state_dict(
-                torch.load(os.path.join(model_path, "optimizer.pt"), map_location=self.args.device)
+                torch.load(os.path.join(model_path, "optimizer.pt"), 
+                           map_location=self.args.device)
             )
             scheduler.load_state_dict(torch.load(os.path.join(model_path, "scheduler.pt")))
 
@@ -446,7 +452,8 @@ class Trainer:
         logging_loss = 0.0
         model.zero_grad()
         train_iterator = trange(
-            epochs_trained, int(num_train_epochs), desc="Epoch", disable=not self.is_local_master()
+            epochs_trained, int(num_train_epochs), desc="Epoch", 
+            disable=not self.is_local_master()
         )
         cold_flag = True
         finetune_flag = True
@@ -481,9 +488,11 @@ class Trainer:
                 parallel_loader = pl.ParallelLoader(train_dataloader, [self.args.device]).per_device_loader(
                     self.args.device
                 )
-                epoch_iterator = tqdm(parallel_loader, desc="Iteration", disable=not self.is_local_master())
+                epoch_iterator = tqdm(parallel_loader, desc="Iteration", 
+                                      disable=not self.is_local_master())
             else:
-                epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=not self.is_local_master())
+                epoch_iterator = tqdm(train_dataloader, desc="Iteration", 
+                                      disable=not self.is_local_master())
 
             for step, inputs in enumerate(epoch_iterator):
 
@@ -791,7 +800,6 @@ class Trainer:
 
         if self.test_dataset:
             test_dataloader = self.get_test_dataloader(self.test_dataset) # test
-
             output_test = self._prediction_loop(test_dataloader, description="Evaluation_test") # test
 
         return output.metrics

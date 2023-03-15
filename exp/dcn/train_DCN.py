@@ -30,6 +30,7 @@ import torch
 import sys
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 
+from inference import Inference
 from transformers import (
     CONFIG_MAPPING,
     MODEL_WITH_LM_HEAD_MAPPING,
@@ -96,7 +97,14 @@ class DataTrainingArguments:
     train_data_file: Optional[str] = field(
         default=None, metadata={"help": "The input training data file (a text file)."}
     )
+
     eval_data_file: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."},
+    )
+    
+    sighan_data_file: Optional[str] = field(
         default=None,
         metadata={
             "help": "An optional input evaluation data file to evaluate the perplexity on (a text file)."},
@@ -252,13 +260,15 @@ def main():
         data_args.block_size = min(data_args.block_size, tokenizer.max_len)
 
     # Get datasets
-
     train_dataset = get_dataset(
         data_args, tokenizer=tokenizer, shuffle=True) \
         if training_args.do_train else None
     eval_dataset = get_dataset(
         data_args, tokenizer=tokenizer, evaluate=True, shuffle=False) \
         if training_args.do_eval or training_args.do_predict else None
+    test_dataset = get_dataset(
+        data_args, tokenizer=tokenizer, evaluate=True, shuffle=False) \
+        if training_args.do_predict else None
 
     data_collator = DataCollatorForPinyinIndexLanguageModeling(
         tokenizer=tokenizer, mlm=data_args.mlm, 
@@ -273,6 +283,7 @@ def main():
         data_collator=data_collator,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
+        test_dataset=test_dataset,
         prediction_loss_only=True,
     )
 
@@ -280,9 +291,9 @@ def main():
     if training_args.do_train:
         model_path = (
             model_args.model_name_or_path
-            if model_args.model_name_or_path is not None and os.path.isdir(model_args.model_name_or_path)
-            else None
-        )
+            if model_args.model_name_or_path is not None \
+                and os.path.isdir(model_args.model_name_or_path)
+            else None)
         trainer.train(model_path=model_path)
         trainer.save_model()
         # For convenience, we also re-save the tokenizer to the same directory,
@@ -294,10 +305,15 @@ def main():
     results = {}
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
-
-        eval_output = trainer.evaluate()
-        perplexity = math.exp(eval_output["eval_loss"])
-        result = {"perplexity": perplexity}
+        # eval_output = trainer.evaluate()
+        # perplexity = math.exp(eval_output["eval_loss"])
+        # result = {"perplexity": perplexity}
+        instance = Inference(
+            model_path=training_args.output_dir, detailed_evaluate=True)
+        if data_args.test_data_file.endswith('.dcn.txt'):
+            result = instance.evaluate_on_dcn_file(data_args.test_data_file)
+        elif data_args.test_data_file.endswith('.tsv'):
+            result = instance.evaluate_on_tsv(data_args.test_data_file)
 
         output_eval_file = os.path.join(
             training_args.output_dir, "eval_results_lm.txt")
@@ -311,12 +327,11 @@ def main():
 
     if training_args.do_predict:
         # trainer.evaluate_sighan()
-        from .inference import Inference
         instance = Inference(model_path=training_args.output_dir)
-        if data_args.test_file.endswith('.dcn.txt'):
-            instance.evaluate_on_dcn_file(data_args.test_file)
-        elif data_args.test_file.endswith('.tsv'):
-            instance.evaluate_on_tsv(data_args.test_file)
+        if data_args.test_data_file.endswith('.dcn.txt'):
+            instance.evaluate_on_dcn_file(data_args.test_data_file)
+        elif data_args.test_data_file.endswith('.tsv'):
+            instance.evaluate_on_tsv(data_args.test_data_file)
     return results
 
 

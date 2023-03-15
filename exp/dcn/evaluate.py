@@ -254,6 +254,7 @@ def evaluate(dcn_path, pred_path):
 
 
 if __name__ == "__main__":
+    # output = os.popen(f'python script/eval_spell_for_training_sent.py {result_path} {input_path}')
     print(sys.argv)
     dcn_path = sys.argv[1]
     pred_path = sys.argv[2]

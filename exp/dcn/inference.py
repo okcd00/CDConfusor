@@ -25,16 +25,20 @@ def load_model(model_path):
     # Load pretrained model and tokenizer
     # model_path: dcn_models/findoc_finetuned_230313/
 
+    # init model
     config = AutoConfig.from_pretrained(model_path)
     model = DCNForMaskedLM.from_pretrained(
         model_path,
         from_tf=bool(".ckpt" in model_path),
         config=config,)
 
+    # init tokenizer
+    inference_script_path = os.path.dirname(os.path.abspath(__file__))
     tokenizer = DcnTokenizer(
-        os.path.join(model_path, '..', '..', 'vocab', 'vocab.txt'), 
-        os.path.join(model_path, '..', '..', 'vocab', 'pinyin_vocab.txt'))
+        os.path.join(inference_script_path, 'vocab', 'vocab.txt'), 
+        os.path.join(inference_script_path, 'vocab', 'pinyin_vocab.txt'))
     
+    # load model to GPU
     model.resize_token_embeddings(len(tokenizer))
     model.cuda()
     return model, tokenizer
@@ -164,24 +168,28 @@ class Inference(object):
         return p, r, f, acc
 
     def evaluate_on_tsv(self, tsv_path, batch_size=4):
-        lines = [line.strip().split('\t') for line in open(tsv_path, 'r')]
-        input_lines = [line[0] for line in lines if line.strip()]
-        truth_lines = [line[1] for line in lines if line.strip()]
+        line_items = [line.strip().split('\t') 
+                      for line in open(tsv_path, 'r') if line.strip()]
+        input_lines = [items[0] for items in line_items]
+        truth_lines = [items[1] for items in line_items]
         return self.evaluate(input_lines, truth_lines, batch_size=batch_size)
 
     def evaluate_on_dcn_file(self, dcn_path, batch_size=4):
-        lines = [line.strip().split('\t') for line in open(dcn_path, 'r')]
+        line_items = [line.strip().split('\t') 
+                      for line in open(dcn_path, 'r') if line.strip()]
         def unk_to_1c(_token):
             if _token == '[UNK]':
                 return '馊'  # not in vocab
+            if _token.startswith('##'):
+                return _token[2:]
             return _token
-        input_lines = [''.join([unk_to_1c(c) for c in line[0].split(' ')]) 
-                       for line in lines if line.strip()]
-        truth_lines = [''.join([unk_to_1c(c) for c in line[1].split(' ')]) 
-                       for line in lines if line.strip()]
+        input_lines = [''.join([unk_to_1c(c) for c in items[0].split(' ')]) 
+                       for items in line_items]
+        truth_lines = [''.join([unk_to_1c(c) for c in items[1].split(' ')]) 
+                       for items in line_items]
         return self.evaluate(input_lines, truth_lines, batch_size=batch_size)
 
-    def evaluate_bad_cases(self, input_lines, truth_lines):
+    def evaluate_bad_cases(self, input_lines, truth_lines, show_num=10):
         results, input_items, result_items = predict_on_texts(
             input_lines=input_lines, 
             model=self.model, tokenizer=self.tokenizer,
@@ -199,14 +207,15 @@ class Inference(object):
                     if r.endswith('[PAD]'):  # too-long-sentences
                         continue
                     err += 1
-                    print(idx)
-                    print("O:", o)
-                    print("I:", d)
-                    print("R:", r)
-                    print("P:", p)
-                    print("T:", t)
-                    print("---------")
-                    # show_diff(p, t)
+                    if err < show_num:
+                        print(idx)
+                        print("O:", o)
+                        print("I:", d)
+                        print("R:", r)
+                        print("P:", p)
+                        print("T:", t)
+                        print("---------")
+                        # show_diff(p, t)
                 else:
                     hit += 1
         print(err, err/total, hit, hit/total, total)
@@ -227,10 +236,12 @@ class Inference(object):
 
 def main():
     instance = Inference(
-        model_path='dcn_models/findoc_finetuned_230313/')
+        model_path='dcn_models/findoc_finetuned_230315/checkpoint-819/')
+    # input_lines, truth_lines = 
+    # instance.evaluate_bad_cases(input_lines, truth_lines)
     p, r, f, acc = instance.evaluate_on_tsv(
-        # '../data/cn/rw/rw_test.tsv')
-        '../data/cn/sighan15/sighan15_test.tsv')
+        '../data/cn/rw/rw_test.tsv')
+        # '../data/cn/sighan15/sighan15_test.tsv')
 
 
 if __name__ == "__main__":
