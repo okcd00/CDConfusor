@@ -53,15 +53,14 @@ class Confusor(object):
         # data loader
         self._load_confusor_data()
 
-        # cache for faster function call
+        # cache for faster function call on phrases
         self.red_score_cache = {}
         
     def _load_confusor_data(self):
-        # load char-level REDscore matrix
-        self.red_score = load_pkl(to_path(SCORE_DATA_DIR, 'red_data.pkl'))
-        # self.del_matrix = load_pkl(to_path(SCORE_DATA_DIR, 'amb_data.pkl'))['del_mat']
-        # self.rep_matrix = load_pkl(to_path(SCORE_DATA_DIR, 'amb_data.pkl'))['rep_mat']
-        self.del_matrix, self.rep_matrix = amb_del_mat, amb_rep_mat
+        # load char-level REDscore matrix: red_score[str1][str2]
+        self.red_score = load_pkl(to_path(SCORE_DATA_DIR, 'red_matrix.pkl'))
+        self.del_matrix = load_pkl(to_path(SCORE_DATA_DIR, 'del_matrix.pkl'))
+        self.rep_matrix = load_pkl(to_path(SCORE_DATA_DIR, 'rep_matrix.pkl'))
 
     def record_time(self, information):
         """
@@ -94,6 +93,17 @@ class Confusor(object):
             heteronym=heteronym)
         return pinyins
 
+    def refined_edit_distance(self, seq1, seq2):
+        """
+        @param seq1: a list of pinyin strings
+        @param seq2: a list of pinyin strings
+        @return: the red score of the two sequences
+        """
+        return refined_edit_distance(
+            seq1, seq2, 
+            del_matrix=self.del_matrix, 
+            rep_matrix=self.rep_matrix)
+    
     def get_similar_pinyins(self, pinyins):
         """
         @param pinyins: a list of pinyin strings
@@ -107,15 +117,6 @@ class Confusor(object):
         @return: a list of (phrase string, score) pairs.
         """
         return []
-
-    def refined_edit_distance(self, seq1, seq2):
-        """
-        @param seq1: a list of pinyin strings
-        @param seq2: a list of pinyin strings
-        @return: the red score of the two sequences
-        """
-        return refined_edit_distance(
-            seq1, seq2, self.del_matrix, self.rep_matrix)
 
     def __call__(self, word, debug=None):
         """

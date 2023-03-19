@@ -2,3 +2,7 @@ tqdm
 jieba
 pypinyin
 Pinyin2Hanzi
+
+# for Google IME
+httpx
+httpx_socks

@@ -56,11 +56,10 @@ def generate_score_matrix(amb_score, ins_rep_score):
     return del_matrix, rep_matrix
 
 
-def refined_edit_distance(str1, str2, score_matrix):
+def refined_edit_distance(str1, str2, del_matrix, rep_matrix, rate=True):
     """
     Given two sequences, return the refined edit distance normalized by the max length.
     """
-    del_matrix, rep_matrix = score_matrix
     matrix = [[i + j for j in range(len(str2) + 1)] for i in range(len(str1) + 1)]
     for i in range(1, len(str1) + 1):
         for j in range(1, len(str2) + 1):
@@ -79,7 +78,9 @@ def refined_edit_distance(str1, str2, score_matrix):
                                matrix[i][j - 1] + ins_score,
                                matrix[i - 1][j - 1] + rep_score)
             # return matrix
-    return matrix[len(str1)][len(str2)] / max([len(str1), len(str2)])
+    if rate:
+        return matrix[len(str1)][len(str2)] / max([len(str1), len(str2)])
+    return matrix[len(str1)][len(str2)]
 
 
 def cosine_similarity(v1, v2):
@@ -93,7 +94,7 @@ def cosine_similarity(v1, v2):
         return 0
 
 
-def complete_ziRED(newpy, ziREDscore, score_matrix):
+def complete_ziRED(newpy, ziREDscore, del_matrix, rep_matrix):
     """
     If new pinyin appears, update the ziREDscore and save it to the default path.
     """
@@ -101,20 +102,20 @@ def complete_ziRED(newpy, ziREDscore, score_matrix):
     ziREDscore[newpy] = {}
     ziREDscore[newpy][newpy] = 0
     for oldpy in ziREDscore.keys():
-        score = refined_edit_distance(newpy, oldpy, score_matrix)
+        score = refined_edit_distance(newpy, oldpy, del_matrix, rep_matrix)
         ziREDscore[newpy][oldpy] = score
         ziREDscore[oldpy][newpy] = score
     return ziREDscore
 
 
-def complete_zi_sim_matrix(newpy, ziREDscore, score_matrix):
+def complete_zi_sim_matrix(newpy, ziREDscore, del_matrix, rep_matrix):
     """
     If new pinyin appears, update the zi_sim_matrix. If the new pinyin is not in ziREDscore, complete it either.
     """
     print("new pinyin: {}, update zi_sim_matrix".format(newpy))
     update_ziRED = False
     if newpy not in ziREDscore:
-        ziREDscore = complete_ziRED(newpy, ziREDscore, score_matrix)
+        ziREDscore = complete_ziRED(newpy, ziREDscore, del_matrix, rep_matrix)
         update_ziRED = True
     new_zi_sim_matrix = {}
     for zipy in ziREDscore.keys():
@@ -148,7 +149,7 @@ def uniform_sample(cand_score_pair, num):
     return [cand_score_pair[i] for i in indices]
     
 
-def calculate_red_matrix(score_matrix, method='char'):
+def calculate_red_matrix(del_matrix, rep_matrix, method='char'):
     # calculate red-score between char-level pinyins.
     if 'char' in method:
         char_pinyin_case = [line.strip() for line in open(f"{CHAR_PY_VOCAB_PATH}", "r") if not line.startswith('[')]
@@ -157,7 +158,7 @@ def calculate_red_matrix(score_matrix, method='char'):
             for second_py in char_pinyin_case:
                 char_red_matrix.setdefault(first_py, {})
                 char_red_matrix[first_py][second_py] = refined_edit_distance(
-                    first_py, second_py, score_matrix)
+                    first_py, second_py, del_matrix, rep_matrix)
         return char_red_matrix
 
     if 'init' in method:
@@ -167,29 +168,35 @@ def calculate_red_matrix(score_matrix, method='char'):
             for second_py in initial_pinyin_case:
                 initial_red_matrix.setdefault(first_py, {})
                 initial_red_matrix[first_py][second_py] = refined_edit_distance(
-                    first_py, second_py, score_matrix)
+                    first_py, second_py, del_matrix, rep_matrix)
         return initial_red_matrix
             
     raise ValueError(f"Invalid method: {method}, should be in [char|init]")
 
 
 def dump_mat_files():
-    amb_data = dict(
-        del_mat=amb_del_mat, 
-        rep_mat=amb_rep_mat) 
-    pickle.dump(amb_data, open(SCORE_DATA_DIR + 'amb_data.pkl', 'wb'))
-    pickle.dump(ins_rep_mat, open(SCORE_DATA_DIR + 'ins_rep_mat.pkl', 'wb'))
+    # old version
+    # amb_data = dict(del_mat=amb_del_mat, rep_mat=amb_rep_mat) 
+    # pickle.dump(amb_data, open(SCORE_DATA_DIR + 'amb_data.pkl', 'wb'))
+    pickle.dump(amb_del_mat, open(SCORE_DATA_DIR + 'amb_del_records.pkl', 'wb'))
+    pickle.dump(amb_rep_mat, open(SCORE_DATA_DIR + 'amb_rep_records.pkl', 'wb'))
+    pickle.dump(ins_rep_mat, open(SCORE_DATA_DIR + 'ins_rep_records.pkl', 'wb'))
 
 
 def main(amb_score=0.5, ins_rep_score=0.25):
     dump_mat_files()
-    score_matrix = generate_score_matrix(
+    del_matrix, rep_matrix = generate_score_matrix(
         amb_score=amb_score, 
         ins_rep_score=ins_rep_score)
-    char_red_matrix = calculate_red_matrix(
-        score_matrix, method='char')
-    pickle.dump(char_red_matrix, open(SCORE_DATA_DIR + 'red_data.pkl', 'wb'))
-    with open(SCORE_DATA_DIR + 'red_data.info', 'w') as f:
+    pickle.dump(del_matrix, 
+                open(SCORE_DATA_DIR + 'del_matrix.pkl', 'wb'))
+    pickle.dump(rep_matrix, 
+                open(SCORE_DATA_DIR + 'rep_matrix.pkl', 'wb'))
+    char_red_matrix = calculate_red_matrix(  # calculate char-level RED as base.
+        del_matrix, rep_matrix, method='char')
+    pickle.dump(char_red_matrix, 
+                open(SCORE_DATA_DIR + 'red_matrix.pkl', 'wb'))
+    with open(SCORE_DATA_DIR + 'red_calculation.info', 'w') as f:
         f.write("amb_score = {amb_score}\nins_rep_score = {ins_rep_score}\n")
 
 

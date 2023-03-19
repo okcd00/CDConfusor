@@ -26,7 +26,9 @@ def edit_distance(str1, str2):
                 d = 0
             else:
                 d = 1
-            matrix[i][j] = min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + d)
+            matrix[i][j] = min(matrix[i - 1][j] + 1, 
+                               matrix[i][j - 1] + 1, 
+                               matrix[i - 1][j - 1] + d)
             # return matrix
     return matrix[len(str1)][len(str2)] / max([len(str1), len(str2)])
 

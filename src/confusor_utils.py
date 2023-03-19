@@ -26,7 +26,7 @@ amb_rep_mat = {
     'h': ['f']}
 
 # insert/replacement matrix
-ins_rep_mat = {}
+ins_rep_mat = {}  # keyboard-error
 keyboard_distance = {}
 offset = [  # six-direction distrub
     (-1, 0), (-1, 1),
@@ -66,11 +66,12 @@ def generate_score_matrix(amb_score, inp_score):
     :param inp_score:
     :return:
     """
+    rep_score = amb_score  # all come from accent.
     def apply_mat(target_mat, mat_data, score):
         for firz, dellist in mat_data.items():
             for secz in dellist:
-                i = zimu2ind(firz)
-                j = zimu2ind(secz)
+                i = char2idx(firz)
+                j = char2idx(secz)
                 target_mat[i][j] -= score
         return target_mat
     del_matrix = [[1 for _ in range(27)] for _ in range(27)]
@@ -80,7 +81,7 @@ def generate_score_matrix(amb_score, inp_score):
             if i == j or i == 26 or j == 26:
                 rep_matrix[i][j] = 0
     del_matrix = apply_mat(del_matrix, amb_del_mat, amb_score)
-    rep_matrix = apply_mat(rep_matrix, amb_rep_mat, amb_score)
+    rep_matrix = apply_mat(rep_matrix, amb_rep_mat, rep_score)
     rep_matrix = apply_mat(rep_matrix, ins_rep_mat, inp_score)
     return del_matrix, rep_matrix
 
@@ -97,16 +98,16 @@ def refined_edit_distance(str1, str2, del_matrix, rep_matrix, rate=False):
     ins_matrix = del_matrix
     for i in range(1, len(str1) + 1):
         for j in range(1, len(str2) + 1):
-            ind_i1 = zimu2ind(str1[i - 1])
-            ind_j1 = zimu2ind(str2[j - 1])
+            ind_i1 = char2idx(str1[i - 1])
+            ind_j1 = char2idx(str2[j - 1])
 
             pstr1 = '0' if i == 1 else str1[i - 2]
             pstr2 = '0' if j == 1 else str2[j - 2]
             # delete a_i
-            del_score = del_matrix[ind_i1][zimu2ind(pstr1)]
+            del_score = del_matrix[ind_i1][char2idx(pstr1)]
 
             # insert b_j after a_i
-            ins_score = ins_matrix[ind_j1][zimu2ind(pstr2)]
+            ins_score = ins_matrix[ind_j1][char2idx(pstr2)]
 
             # replace a_i with b_j, the score equals to 0 if a_i == b_j
             rep_score = rep_matrix[ind_i1][ind_j1]
@@ -121,10 +122,12 @@ def refined_edit_distance(str1, str2, del_matrix, rep_matrix, rate=False):
 
 
 if __name__ == "__main__":
-    del_matrix, rep_matrix = generate_score_matrix(0.5, 0.5)
+    del_matrix, rep_matrix = generate_score_matrix(
+        amb_score=0.5,  # error with accents
+        inp_score=0.5  # error with keyboard mistyping
+    )
     print(
         refined_edit_distance(
             'hello', 'hello', 
-            del_matrix, rep_matrix, rate=True)
-    )
-    pass
+            del_matrix, rep_matrix, rate=True))
+
