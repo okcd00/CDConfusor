@@ -8,7 +8,7 @@
 #   desc     : APIs for inference call with DCN.
 # ==========================================================================
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import sys
 sys.path.append('./')
@@ -236,11 +236,12 @@ class Inference(object):
 
 def main():
     instance = Inference(
-        model_path='dcn_models/findoc_finetuned_230315/checkpoint-819/')
+        model_path='dcn_models/findoc_finetuned_230316/checkpoint-52761/')
     # input_lines, truth_lines = 
     # instance.evaluate_bad_cases(input_lines, truth_lines)
     p, r, f, acc = instance.evaluate_on_tsv(
-        '../data/cn/rw/rw_test.tsv')
+        '../data/cn/Wang271k/dcn_train.tsv')
+        # '../data/cn/rw/rw_test.tsv')
         # '../data/cn/sighan15/sighan15_test.tsv')
 
 

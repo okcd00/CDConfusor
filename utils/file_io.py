@@ -527,13 +527,18 @@ def load_json(fp):
         return json.load(f)
 
 
-def dump_json(obj, fp, debug=False):
+def dump_json(obj, fp, debug=False, compress=True):
     try:
         fp = os.path.abspath(fp)
         if not os.path.exists(os.path.dirname(fp)):
             os.makedirs(os.path.dirname(fp))
         with open(fp, 'w', encoding='utf8') as f:
-            json.dump(obj, f, ensure_ascii=False, indent=4, separators=(',', ':'))
+            if compress:
+                json.dump(obj, f, ensure_ascii=False, 
+                          separators=(',', ':'))
+            else:
+                json.dump(obj, f, ensure_ascii=False, 
+                        indent=4, separators=(', ', ': '))
         if debug:
             print(f'json文件保存成功，{fp}')
         return True
@@ -543,16 +548,70 @@ def dump_json(obj, fp, debug=False):
         return False
 
 
+def load_vocab(fp, show_time=False):
+    if show_time:
+        start_time = time.time()
+        print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+    if not os.path.exists(fp):
+        print("Failed for file-not-existed.")
+        return None
+    ret = [line.strip() for line in open(fp, 'r')]
+    if show_time:
+        print(f"cost {round(time.time() - start_time, 3)} seconds.")
+    return ret
 
-def load_pkl(fp):
-    start_time = time.time()
-    print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+
+def save_kari(obj, fp, show_time=False):
+    # save key-array-items
+    if show_time:
+        start_time = time.time()
+    if not os.path.exists(os.path.dirname(fp)):
+        os.makedirs(os.path.dirname(fp))
+    with open(fp, 'w') as f:
+        for k, v in sorted(obj.keys()):
+            f.write(f"{k}\t{' '.join(v)}\n")
+    if show_time:
+        print(f"cost {round(time.time() - start_time, 3)} seconds.")
+        print(f"Saved {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+
+
+def load_kari(fp, show_time=False):
+    # load key-array-items
+    if show_time:
+        start_time = time.time()
+        print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+    if not os.path.exists(fp):
+        print("Failed for file-not-existed.")
+        return None
+    ret = {line.strip().split('\t')[0]: line.strip().split('\t')[1].split(' ') 
+           for line in open(fp, 'r')}
+    if show_time:
+        print(f"cost {round(time.time() - start_time, 3)} seconds.")
+    return ret
+
+
+def save_pkl(obj, fp, show_time=False):
+    if show_time:
+        start_time = time.time()
+    if not os.path.exists(os.path.dirname(fp)):
+        os.makedirs(os.path.dirname(fp))
+    pickle.dump(obj, open(fp, 'wb'))
+    if show_time:
+        print(f"cost {round(time.time() - start_time, 3)} seconds.")
+        print(f"Saved {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+
+
+def load_pkl(fp, show_time=False):
+    if show_time:
+        start_time = time.time()
+        print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
     if not os.path.exists(fp):
         print("Failed for file-not-existed.")
         return None
     ret = pickle.load(open(fp, 'rb'))
-    print(f"cost {round(time.time() - start_time, 3)} seconds.")
-    return pickle.load(open(fp, 'rb'))
+    if show_time:
+        print(f"cost {round(time.time() - start_time, 3)} seconds.")
+    return ret
 
 
 def get_main_dir():

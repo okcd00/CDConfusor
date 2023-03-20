@@ -28,7 +28,7 @@ VOCAB_PATH = f"{REPO_DIR}/data/vocab.txt"
 CHAR_PY_VOCAB_PATH = f"{REPO_DIR}/data/vocab_pinyin.txt"
 PY_MAPPING_PATH = f"{REPO_DIR}/data/pinyin_mapping.json"
 MEMORY_PATH = f"{REPO_DIR}/data/memory.json"
-IME_MEMORY_PATH = f"{REPO_DIR}/data/ime_memory.google.json"
+IME_MEMORY_PATH = f"{REPO_DIR}/data/ime_memory.json"
 
 
 def to_path(*args):
