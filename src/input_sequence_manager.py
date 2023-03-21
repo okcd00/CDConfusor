@@ -18,6 +18,7 @@ import httpx
 import requests
 import pypinyin
 import Pinyin2Hanzi
+from pprint import pprint
 
 
 # PATH (path to custom-files)
@@ -25,7 +26,7 @@ from paths import (
     SCORE_DATA_DIR, TMP_DIR,
     PY_MAPPING_PATH, 
     MEMORY_PATH, IME_MEMORY_PATH,
-    CHAR_PY_VOCAB_PATH,)
+    VOCAB_PATH, CHAR_PY_VOCAB_PATH,)
 
 # utils
 from utils import (
@@ -43,13 +44,16 @@ class InputSequenceManager(object):
         "text={}&itc=zh-t-i0-pinyin&num=20&cp=1&cs=1&ie=utf-8&oe=utf-8&app=demopage"
     
     def __init__(self):
+        self.vocab = load_vocab(VOCAB_PATH)
+        self.vocab_set = set(self.vocab)  # for O(1) finding
         self.char_vocab = load_vocab(CHAR_PY_VOCAB_PATH)
         self.py_mapping = load_json(f"{PY_MAPPING_PATH}")
 
-        self.memory = {}  # pinyin -> [input_sequence1, input_sequence2, ...]
+        self.memory = {}  # pinyin_str -> similar [input_sequence, ...] 
         self.save_flag = False
-        self.ime_memory = {}  # input_sequence -> [word1, word2, ...]
+        self.ime_memory = {}  # input_sequence -> [(word, rank-chain), ...]
         self.ime_save_flag = False
+        self.ime_candidate_count = 20
         self.init_memory()  
         self.init_google_ime()
 
@@ -62,18 +66,23 @@ class InputSequenceManager(object):
             if MEMORY_PATH.endswith('.json'):
                 dic = load_json(memory_path)
             elif MEMORY_PATH.endswith('.kari'): 
-                dic = load_kari(memory_path)
+                dic = load_kari(memory_path, show_time=True)
             for k, v in dic.items():
                 self.memory[k] = sorted(set(v + self.memory[k]))
+            print(f"Loaded {len(dic.items())} items from {memory_path}")
 
     def init_memory(self):
         # load recorded google IME memory
         if os.path.exists(MEMORY_PATH):  
             self.load_memory(MEMORY_PATH)
+        
+        # mkdir for tmp files
+        os.system(f"mkdir -p {TMP_DIR}")
 
     def load_ime_memory(self, ime_memory_path=None):
         dic = load_json(ime_memory_path)
         self.ime_memory.update(dic)
+        print(f"Loaded {len(dic.items())} items from {ime_memory_path}")
 
     def init_google_ime(self):
         # load recorded google IME memory
@@ -84,29 +93,46 @@ class InputSequenceManager(object):
         self.transport = SyncProxyTransport.from_url(self.proxies)
 
     def save_memory(self, force=False):
-        if not os.path.exists(f"{TMP_DIR}"):
-            os.system(f"mkdir -p {TMP_DIR}")
+        # print(self.save_flag, self.ime_save_flag)
+        fp = '[not-saved]'
         if self.save_flag or force:
             fp = MEMORY_PATH.split('/')[-1]
             if fp.endswith('.json'):
                 dump_json(self.memory, f"{TMP_DIR}/{fp}")
             elif fp.endswith('.kari'):
                 save_kari(self.memory, f"{TMP_DIR}/{fp}")
+            else:
+                raise ValueError(f"Unknown file format: {fp}")
+            print(f"Saved ISM memory in {TMP_DIR}/{fp}.", time.ctime())
+        
         if self.ime_save_flag or force:
             fp = IME_MEMORY_PATH.split('/')[-1]
             if fp.endswith('.json'):
-                dump_json(self.ime_memory, f"{TMP_DIR}/{fp}")
+                with open(f"{TMP_DIR}/{fp}", 'w') as f:
+                    f.write('{\n')
+                    f.write(',\n'.join([
+                        f' "{inp}": {json.dumps(v, ensure_ascii=False)}' 
+                        for inp, v in sorted(
+                            self.ime_memory.items(), 
+                            key=lambda x: x[0])]))
+                    f.write('\n}\n')
             elif fp.endswith('.kari'):
                 save_kari(self.ime_memory, f"{TMP_DIR}/{fp}")
-        print("Saved ISM memory.", time.ctime())
+            else:
+                raise ValueError(f"Unknown file format: {fp}")
+            print(f"Saved ISM memory in {TMP_DIR}/{fp}.", time.ctime())
         
     def update_memory_from_tmp(self):
-        if os.path.exists(f"{TMP_DIR}/memory.json"):
-            os.system(f"mv {MEMORY_PATH} {MEMORY_PATH}.bak")
-            os.system(f"cp {TMP_DIR}/memory.json {MEMORY_PATH}")
-        if os.path.exists(f"{TMP_DIR}/ime_memory.json"):
-            os.system(f"mv {IME_MEMORY_PATH} {IME_MEMORY_PATH}.bak")
-            os.system(f"cp {TMP_DIR}/ime_memory.google.json {IME_MEMORY_PATH}")
+        fp = MEMORY_PATH.split('/')[-1]
+        if os.path.exists(f"{TMP_DIR}/{fp}"):
+            if os.path.exists(MEMORY_PATH):
+                os.system(f"mv {MEMORY_PATH} {MEMORY_PATH}.bak")
+            os.system(f"cp {TMP_DIR}/{fp} {MEMORY_PATH}")
+        fp = IME_MEMORY_PATH.split('/')[-1]
+        if os.path.exists(f"{TMP_DIR}/{fp}"):
+            if os.path.exists(IME_MEMORY_PATH):
+                os.system(f"mv {IME_MEMORY_PATH} {IME_MEMORY_PATH}.bak")
+            os.system(f"cp {TMP_DIR}/{fp} {IME_MEMORY_PATH}")
 
     def py2phrase(self, pinyins):
         """
@@ -128,7 +154,8 @@ class InputSequenceManager(object):
         input_sequences = []
         for simp_idx, _ in enumerate(pinyin):
             input_sequences.append(''.join(
-                [py[0] if idx >= simp_idx else py for idx, py in enumerate(pinyin)]))
+                [py[0] if idx >= simp_idx else py 
+                 for idx, py in enumerate(pinyin)]))
         return input_sequences
 
     def get_similar_input_sequences(self, pinyin):
@@ -137,13 +164,13 @@ class InputSequenceManager(object):
             pinyin = [p[0] for p in pinyin]
         if pinyin.__len__() == 1:
             if pinyin[0] in self.py_mapping:
-                return self.py_mapping[pinyin]
+                return self.py_mapping[pinyin[0]]
             else:
                 print("Invalid pinyin", pinyin)
                 return pinyin
         input_sequences = set()
         input_sequences.add(''.join(pinyin))
-        # errors in single char
+        # errors in single Chinese character
         for err_idx, err_py in enumerate(pinyin):
             for py_cand in self.py_mapping[err_py]:
                 input_sequences.add(
@@ -202,43 +229,90 @@ class InputSequenceManager(object):
             logging.exception(e)
             return "请求失败，请重试"
 
-    def _from_online_ime(self, input_sequence, method='client'):
-        url = self.URL_GOOGLE_IME_API.format(input_sequence)
-        if method in ['request']:
-            rjson = self.request_google_ime(url)
-        elif method in ['client']:
-            rjson = self.client_post_google_ime(url)
-        if rjson[0] == 'SUCCESS':
-            # 424it [03:43,  1.90it/s]
-            candidates = rjson[1][0][1]
-            cn_tags = rjson[1][0][3]["lc"]
-            candidates = [c for i, c in enumerate(candidates) 
-                            if list(set(map(int, cn_tags[i].split()))) == [16]]
-        return candidates
+    def _analysis_from_ime_json(self, input_sequence, rjson, 
+                                method='client', heuristic=True, ngram=None):
+        _ret = []
+        i_size = input_sequence.__len__()
+        candidates, info = rjson[1][0][1], rjson[1][0][3]
+        matched_length = info.get("matched_length")
 
-    def to_candidates(self, input_sequence):
+        for i, c in enumerate(candidates[:self.ime_candidate_count]):
+            t = map(int, info["lc"][i].split())
+            if list(set(t)) != [16]:  
+                continue  # not Chinese phrase
+            if not heuristic:
+                if i_size == len(c):
+                    _ret.append((c, f'{i}'))
+                continue
+            if i_size == 1:
+                _ret.append((c, f'{i}'))
+                continue
+            if (matched_length is None) or matched_length[i] == i_size:
+                _ret.append((c, f'{i}'))
+                continue
+            _rest = input_sequence[matched_length[i]:]
+            for cand, rank_str in self._from_online_ime(
+                _rest, method=method, heuristic=heuristic,
+                ngram=(ngram-1 if ngram is not None else ngram)):
+                _ret.append((c + cand, f"{i}-{rank_str}"))
+        
+        return _ret
+
+    def _from_online_ime(self, input_sequence, method='client', 
+                         heuristic=True, ngram=None):
+        # if ngram is None, return all length of word candidates.
+        if ngram == 0:
+            return []
+        
+        if input_sequence in self.ime_memory:
+            # a list of (cand_str, rank_str) items
+            _ret = self.ime_memory[input_sequence] 
+        else:
+            # generate url for online IME
+            url = self.URL_GOOGLE_IME_API.format(input_sequence)
+            if method in ['request']:
+                rjson = self.request_google_ime(url)
+            elif method in ['client']:
+                rjson = self.client_post_google_ime(url)
+            # network error
+            if rjson[0] != 'SUCCESS':  # 424it [03:43,  1.90it/s]
+                print("Error: ", rjson)
+                candidates = _ret
+                return candidates
+            _ret = self._analysis_from_ime_json(
+                input_sequence, rjson, 
+                method=method, heuristic=heuristic)
+        
+        # update memory
+        self.ime_memory[input_sequence] = _ret
+        self.ime_save_flag = True
+
+        # output candidates with n-gram
+        if ngram is not None:
+            _ret = [(cand_str, rank_str) for cand_str, rank_str in _ret 
+                    if cand_str.__len__() == ngram \
+                    and all([c in self.vocab_set for c in cand_str])]
+        return _ret
+
+    def to_candidates(self, input_sequence, ngram=None):
         if input_sequence in self.ime_memory:
             return self.ime_memory[input_sequence]
         # self.py2word() only takes complete pinyin lists.
-        candidates = self._from_online_ime(input_sequence)
-        self.ime_memory[input_sequence] = candidates  # update
-        self.ime_save_flag = True
+        candidates = self._from_online_ime(input_sequence, ngram=ngram)
         return candidates
-
-    def __del__(self):
-        if self.save_flag or self.ime_save_flag:
-            self.save_memory()
 
     def __call__(self, word=None, pinyin=None):
         # return similar input sequence with the input string
         pinyin, input_sequences = self.get_input_sequence(
             word=word, pinyin=pinyin, 
             simp_candidates=True)
+        self.save_memory()
         return pinyin, input_sequences
 
 
 if __name__ == "__main__":
     ism = InputSequenceManager()
-    # print(ism.to_candidates('chend'))
-    print(ism.get_input_sequence('陈点'))
-    pass
+    ret = ism._from_online_ime('chaodq', ngram=3)
+    print(ret)
+    ism.save_memory()
+    ism.update_memory_from_tmp()
