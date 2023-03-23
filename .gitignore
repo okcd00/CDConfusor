@@ -1,6 +1,8 @@
 *.bak
 .vscode/
 data/*.bak
+data/*.pkl
+data/*ry.json
 .ipynb_checkpoints/
 input_candidates*.json
 spellGraphs.txt
@@ -14,6 +16,7 @@ infer_model/
 *.bin
 runs/
 dcn_model*/
+wandb/
 chinese-roberta-wwm-ext/
 Wang271*/
 

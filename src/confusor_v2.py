@@ -15,13 +15,6 @@ import sys
 sys.path.append("./")
 sys.path.append("../")
 
-# paths
-from paths import (
-    to_path,
-    VOCAB_PATH, CHAR_PY_VOCAB_PATH,
-    SCORE_DATA_DIR, EMBEDDING_PATH
-)
-
 # requirements
 import time
 import pypinyin
@@ -30,15 +23,22 @@ from tqdm import tqdm
 from pprint import pprint
 from src.input_sequence_manager import InputSequenceManager
 
+# paths
+from paths import (
+    to_path,
+    CONFUSION_PATH, RED_SCORE_PATH,
+    VOCAB_PATH, CHAR_PY_VOCAB_PATH,
+    SCORE_DATA_DIR, EMBEDDING_PATH)
+
 # utils
 from utils import (
     load_vocab,
     Py2HzUtils,
     save_pkl, load_pkl,
-    save_kari, load_kari,
     edit_distance, 
     is_chinese_char,
     is_pure_chinese_phrase)
+
 from src.confusor_utils import (
     refined_edit_distance,
 )
@@ -48,16 +48,18 @@ class Confusor(object):
     RED_THRESHOLD = 0.4
     PUNC_LIST = "，；。？！…"
 
-    def __init__(self):
+    def __init__(self, debug=False):
         # for debugging
-        self.debug = True
+        self.debug = debug
         self.timer = []
 
         # cache for faster function call on phrases
+        self.confusor_cache = {}  # input_str: {word_size: list of words}
+        self.save_flag_confusor = False
         self.red_score_cache = {}  # (str1, str2): float
-        self.update_flag_red = False
-        self.path_to_red_score_cache = os.path.join(
-            SCORE_DATA_DIR, 'red_cache.pkl')
+        self.save_flag_red = False
+        self.path_to_confusor_cache = CONFUSION_PATH
+        self.path_to_red_score_cache = RED_SCORE_PATH
 
         # data loader
         self._load_confusor_data()
@@ -74,9 +76,13 @@ class Confusor(object):
         self.del_matrix = load_pkl(to_path(SCORE_DATA_DIR, 'del_matrix.pkl'))
         self.rep_matrix = load_pkl(to_path(SCORE_DATA_DIR, 'rep_matrix.pkl'))
 
-        # load red scores for longer phrases
+        # load red scores & confusor for longer phrases
         if os.path.exists(self.path_to_red_score_cache):
             self.red_score_cache = load_pkl(self.path_to_red_score_cache)
+            print(f"Loaded {len(self.red_score_cache)} items from {self.path_to_red_score_cache}")
+        if os.path.exists(self.path_to_confusor_cache):
+            self.confusor_cache = load_pkl(self.path_to_confusor_cache)
+            print(f"Loaded {len(self.confusor_cache)} items from {self.path_to_confusor_cache}")
 
     def record_time(self, information):
         """
@@ -84,6 +90,10 @@ class Confusor(object):
         """
         if self.debug:
             self.timer.append((information, time.time()))
+
+    def print(self, *args):
+        if self.debug:
+            pprint(*args)
 
     def get_pinyin(self, char, heteronym=False):
         """
@@ -138,6 +148,7 @@ class Confusor(object):
             rep_matrix=self.rep_matrix, 
             rate=False)
         self.red_score_cache[(seq1, seq2)] = red_score
+        self.save_flag_red = True
         if rate:
             return red_score / max(len(seq1), len(seq2))
         return red_score
@@ -148,26 +159,52 @@ class Confusor(object):
         @return: a list of candidate input_sequences, tuple(pinyin string, ime_rank).
         """
         ret = {}
-        simpy = self.ism.simpy(pinyin)
+        simpy = self.ism.simpy(pinyin)  
         pinyin, input_sequences = self.ism(word=None, pinyin=pinyin)
-        for py1 in simpy:
-            for py2 in [''.join(pinyin)] + input_sequences:
-                red_score = self.refined_edit_distance(py1, py2, rate=True)
-                ret[py2] = min(red_score, ret.get(py2, 1.0))
+        for py1 in [''.join(pinyin)] + simpy:
+            if has_mistyped:
+                for py2 in [''.join(pinyin)] + input_sequences:
+                    red_score = self.refined_edit_distance(py1, py2, rate=True)
+                    ret[py2] = min(red_score, ret.get(py2, 1.0))
+            else:  # people only type in simplifed pinyin, without typos.
+                ret[py1] = 0.0  
         ret = [(k, v) for k, v in ret.items() if v < self.RED_THRESHOLD]
+        # return a list of (pinyin string, score) pairs
         return sorted(ret, key=lambda x: x[1])
 
-    def get_confusion_set(self, cand_pinyins, sort=False):
+    def get_candidates(self, input_sequence, ngram=None):
+        """
+        @param input_sequence: a string of pinyin / simplified pinyin
+        @param ngram: the ngram of the output phrase
+        """
+        _inp = input_sequence
+        self.confusor_cache.setdefault(_inp, {})
+        if self.confusor_cache[_inp].get(ngram) is None:
+            candidates = self.ism.to_candidates(_inp, ngram=2)
+            # save in cache 
+            self.confusor_cache[_inp][ngram] = candidates
+            self.save_flag_confusor = True
+        else:
+            candidates = self.confusor_cache[_inp][ngram]
+        return candidates
+
+    def get_confusion_set(self, cand_pinyins, ngram=None, sort=True):
         """
         @param pinyins: a list of (pinyin string, score) pairs
         @return: a list of (phrase string, score) pairs.
         """
-        if not sort:
-            cfs = {}
-            for py, score in cand_pinyins:
-                for cand in self.ism.to_candidates(py):
-                    cfs[cand] = min(score, cfs.get(cand, 999))
-        return sorted(cfs.items(), key=lambda x: x[1])
+        cfs = {}
+        for py, score in cand_pinyins:
+            for cand, rank_str in self.ism.to_candidates(py, ngram=ngram):
+                rank = list(map(int, rank_str.split('-')))
+                if sum(rank) > 9:
+                    continue
+                cfs[cand] = min(score + sum(rank) * 0.01, cfs.get(cand, 999))
+        if sort:
+            ret = sorted(cfs.items(), key=lambda x: x[1])
+        else:
+            ret = [(k, v) for k, v in cfs.items()]
+        return ret
 
     def warmup_ism_memory(self):
         for _py1 in tqdm(self.py_vocab):
@@ -178,13 +215,13 @@ class Confusor(object):
                 word=None, pinyin=[_py1], simp_candidates=True)
             for _sp in simpy:
                 red = self.refined_edit_distance(_py1, _sp, rate=False)
-                candidates = self.ism.to_candidates(_sp, ngram=1)
+                candidates = self.get_candidates(_sp, 1)
         self.save_memory()
 
         for _py1 in tqdm(self.py_vocab):
             if _py1.startswith('['):
                 continue
-            for _py2 in tqdm(self.py_vocab):
+            for _py2 in self.py_vocab:
                 if _py2.startswith('['):
                     continue
                 red = self.refined_edit_distance(_py1, _py2, rate=False)
@@ -192,21 +229,23 @@ class Confusor(object):
                     word=None, pinyin=[_py1, _py2], simp_candidates=True)
                 simpy = self.ism.simpy([_py1, _py2])
                 for _sp in simpy:
-                    candidates = self.ism.to_candidates(_sp, ngram=2)
+                    candidates = self.get_candidates(_sp, 2)
             self.save_memory()
 
     def save_memory(self):
         self.ism.save_memory()
-        save_pkl(
-            self.red_score_cache, 
-            self.path_to_red_score_cache)
+        if self.save_flag_confusor:
+            save_pkl(
+                self.confusor_cache, 
+                self.path_to_confusor_cache)
+            self.save_flag_confusor = False
+        if self.save_flag_red:
+            save_pkl(
+                self.red_score_cache, 
+                self.path_to_red_score_cache)
+            self.save_flag_confusor = False
 
-    def __del__(self):
-        if self.update_flag_red:
-            self.save_memory()
-        self.update_flag_red = False
-
-    def __call__(self, word, context=None, debug=None):
+    def __call__(self, word, context=None, has_mistyped=False, debug=None):
         """
         input a word, return its word-level confusion (a list of words).
         """
@@ -220,29 +259,32 @@ class Confusor(object):
         pinyins = self.get_pinyin_list(
             word, context=context, heteronym=False)  
         self.record_time('get pinyin list')
-        if self.debug:
-            pprint(pinyins)
+        self.print(pinyins)
         if pinyins is None:
             return [word]  # return itself if not a Chinese word
 
         # get simliar pinyin sequences of the word
-        cand_pinyins = self.get_similar_pinyins(pinyins)
+        cand_pinyins = self.get_similar_pinyins(
+            pinyins, has_mistyped=has_mistyped)
         self.record_time('get pinyin sequence')
-        if self.debug:
-            pprint(cand_pinyins)
+        self.print(cand_pinyins)
 
         # get the confusion set with the same/similar pinyin sequence.
-        confusion_set = self.get_confusion_set(cand_pinyins)
+        confusion_set = self.get_confusion_set(
+            cand_pinyins=cand_pinyins, 
+            ngram=len(word), sort=True)
         self.record_time('get confusion set')
-        if self.debug:
-            pprint(confusion_set)
+        self.print(confusion_set)
         
         # select some of them as the output.
-        return confusion_set
+        self.save_memory()
+        return [k for k, v in confusion_set]
 
 
 if __name__ == "__main__":
     cfs = Confusor()
-    # cfs('陈点')
+    # ret = cfs('短裙')
+    # print(ret)
     # cfs.ism.update_memory_from_tmp()
     cfs.warmup_ism_memory()
+    cfs.save_memory()

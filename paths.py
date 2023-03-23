@@ -27,8 +27,14 @@ SCORE_DATA_DIR = CONFUSOR_DATA_DIR + 'score_data/'
 VOCAB_PATH = f"{REPO_DIR}/data/vocab.txt"
 CHAR_PY_VOCAB_PATH = f"{REPO_DIR}/data/vocab_pinyin.txt"
 PY_MAPPING_PATH = f"{REPO_DIR}/data/pinyin_mapping.json"
-MEMORY_PATH = f"{REPO_DIR}/data/memory.json"
+
+# pre-processed memory files
+IS_MEMORY_PATH = f"{REPO_DIR}/data/is_memory.json"
 IME_MEMORY_PATH = f"{REPO_DIR}/data/ime_memory.json"
+
+# generated cache files
+CONFUSION_PATH = f"{REPO_DIR}/data/cfs_cache.pkl"
+RED_SCORE_PATH = f"{REPO_DIR}/data/red_cache.pkl"
 
 
 def to_path(*args):

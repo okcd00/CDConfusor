@@ -8,8 +8,6 @@
 #   desc     : APIs for inference call with DCN.
 # ==========================================================================
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
-
 import sys
 sys.path.append('./')
 
@@ -236,16 +234,27 @@ class Inference(object):
 
 def main():
     instance = Inference(
-        model_path='dcn_models/findoc_finetuned_230315/checkpoint-819/')
+        model_path='dcn_models/findoc_finetuned_w271k_fd2/checkpoint-3376/')
     # input_lines, truth_lines = 
     # instance.evaluate_bad_cases(input_lines, truth_lines)
-    p, r, f, acc = instance.evaluate_on_tsv(
-        '../data/cn/findoc/findoc_test.v2.tsv'
-        # '../data/cn/Wang271k/dcn_train.tsv'
-        # '../data/cn/rw/rw_test.tsv'
-        # '../data/cn/sighan15/sighan15_test.tsv'
-    )
+    results = {}
+
+    path_to_test_files = {
+        'rw': '../data/cn/rw/rw_test.tsv',
+        'rd2': '../data/cn/findoc/findoc_test.v2.tsv',
+        'sighan': '../data/cn/sighan15/sighan15_test.tsv',
+        'w271k': '../data/cn/Wang271k/dcn_train.tsv',
+    }
+
+    def check_on(key):
+        p, r, f, acc = instance.evaluate_on_tsv(path_to_test_files[key])
+        results[key] = (p, r, f, acc)
+
+    for key in ['rw', 'rd2', 'sighan', 'w271k']:
+        check_on(key)
+    print(results)
 
 
 if __name__ == "__main__":
+    os.environ["CUDA_VISIBLE_DEVICES"] = "7"
     main()

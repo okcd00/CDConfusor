@@ -25,7 +25,7 @@ from pprint import pprint
 from paths import (
     SCORE_DATA_DIR, TMP_DIR,
     PY_MAPPING_PATH, 
-    MEMORY_PATH, IME_MEMORY_PATH,
+    IS_MEMORY_PATH, IME_MEMORY_PATH,
     VOCAB_PATH, CHAR_PY_VOCAB_PATH,)
 
 # utils
@@ -49,8 +49,8 @@ class InputSequenceManager(object):
         self.char_vocab = load_vocab(CHAR_PY_VOCAB_PATH)
         self.py_mapping = load_json(f"{PY_MAPPING_PATH}")
 
-        self.memory = {}  # pinyin_str -> similar [input_sequence, ...] 
-        self.save_flag = False
+        self.is_memory = {}  # pinyin_str -> similar [input_sequence, ...] 
+        self.is_save_flag = False
         self.ime_memory = {}  # input_sequence -> [(word, rank-chain), ...]
         self.ime_save_flag = False
         self.ime_candidate_count = 20
@@ -63,18 +63,18 @@ class InputSequenceManager(object):
     def load_memory(self, memory_path=None):
         # ime_memory.google.json
         if os.path.exists(memory_path):
-            if MEMORY_PATH.endswith('.json'):
+            if IS_MEMORY_PATH.endswith('.json'):
                 dic = load_json(memory_path)
-            elif MEMORY_PATH.endswith('.kari'): 
+            elif IS_MEMORY_PATH.endswith('.kari'): 
                 dic = load_kari(memory_path, show_time=True)
             for k, v in dic.items():
-                self.memory[k] = sorted(set(v + self.memory[k]))
+                self.is_memory[k] = sorted(set(v + self.is_memory.get(k, [])))
             print(f"Loaded {len(dic.items())} items from {memory_path}")
 
     def init_memory(self):
         # load recorded google IME memory
-        if os.path.exists(MEMORY_PATH):  
-            self.load_memory(MEMORY_PATH)
+        if os.path.exists(IS_MEMORY_PATH):  
+            self.load_memory(IS_MEMORY_PATH)
         
         # mkdir for tmp files
         os.system(f"mkdir -p {TMP_DIR}")
@@ -95,12 +95,12 @@ class InputSequenceManager(object):
     def save_memory(self, force=False):
         # print(self.save_flag, self.ime_save_flag)
         fp = '[not-saved]'
-        if self.save_flag or force:
-            fp = MEMORY_PATH.split('/')[-1]
+        if self.is_save_flag or force:
+            fp = IS_MEMORY_PATH.split('/')[-1]
             if fp.endswith('.json'):
-                dump_json(self.memory, f"{TMP_DIR}/{fp}")
+                dump_json(self.is_memory, f"{TMP_DIR}/{fp}")
             elif fp.endswith('.kari'):
-                save_kari(self.memory, f"{TMP_DIR}/{fp}")
+                save_kari(self.is_memory, f"{TMP_DIR}/{fp}")
             else:
                 raise ValueError(f"Unknown file format: {fp}")
             print(f"Saved ISM memory in {TMP_DIR}/{fp}.", time.ctime())
@@ -123,11 +123,11 @@ class InputSequenceManager(object):
             print(f"Saved ISM memory in {TMP_DIR}/{fp}.", time.ctime())
         
     def update_memory_from_tmp(self):
-        fp = MEMORY_PATH.split('/')[-1]
+        fp = IS_MEMORY_PATH.split('/')[-1]
         if os.path.exists(f"{TMP_DIR}/{fp}"):
-            if os.path.exists(MEMORY_PATH):
-                os.system(f"mv {MEMORY_PATH} {MEMORY_PATH}.bak")
-            os.system(f"cp {TMP_DIR}/{fp} {MEMORY_PATH}")
+            if os.path.exists(IS_MEMORY_PATH):
+                os.system(f"mv {IS_MEMORY_PATH} {IS_MEMORY_PATH}.bak")
+            os.system(f"cp {TMP_DIR}/{fp} {IS_MEMORY_PATH}")
         fp = IME_MEMORY_PATH.split('/')[-1]
         if os.path.exists(f"{TMP_DIR}/{fp}"):
             if os.path.exists(IME_MEMORY_PATH):
@@ -149,6 +149,7 @@ class InputSequenceManager(object):
     def simpy(self, pinyin):
         # simplified input sequences from the pinyin
         # simplify inputs with first char: xujiali -> [xjl, xujl, xujial]
+        # not that the original pinyin is not in the returned list
         if isinstance(pinyin[0], list):
             pinyin = [p[0] for p in pinyin]
         input_sequences = []
@@ -189,12 +190,12 @@ class InputSequenceManager(object):
             pinyin = [p[0] for p in pinyin]
         pinyin_str = ''.join(pinyin)
         if simp_candidates:
-            if pinyin_str in self.memory:
-                input_sequences = self.memory[pinyin_str]
+            if pinyin_str in self.is_memory:
+                input_sequences = self.is_memory[pinyin_str]
             else:
                 input_sequences = self.get_similar_input_sequences(pinyin)
-                self.memory[pinyin_str] = input_sequences
-                self.save_flag = True
+                self.is_memory[pinyin_str] = input_sequences
+                self.is_save_flag = True
         else:
             input_sequences = [pinyin_str]
         return pinyin, input_sequences
@@ -283,9 +284,9 @@ class InputSequenceManager(object):
                 input_sequence, rjson, 
                 method=method, heuristic=heuristic)
         
-        # update memory
-        self.ime_memory[input_sequence] = _ret
-        self.ime_save_flag = True
+            # update memory
+            self.ime_memory[input_sequence] = _ret
+            self.ime_save_flag = True
 
         # output candidates with n-gram
         if ngram is not None:
@@ -312,7 +313,7 @@ class InputSequenceManager(object):
 
 if __name__ == "__main__":
     ism = InputSequenceManager()
-    ret = ism._from_online_ime('chaodq', ngram=3)
+    ret = ism._from_online_ime('chendian', ngram=2)
     print(ret)
-    ism.save_memory()
+    # ism.save_memory()
     ism.update_memory_from_tmp()
