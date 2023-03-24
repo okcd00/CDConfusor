@@ -54,37 +54,45 @@ class InputSequenceManager(object):
         self.ime_memory = {}  # input_sequence -> [(word, rank-chain), ...]
         self.ime_save_flag = False
         self.ime_candidate_count = 20
-        self.init_memory()  
-        self.init_google_ime()
+        self.ime_max_selection_count = 3
+        self.init_is_memory()  
+        self.init_ime_memory()
 
         self.ph_util = Py2HzUtils()
         self.is_chinese = Pinyin2Hanzi.is_chinese
 
-    def load_memory(self, memory_path=None):
-        # ime_memory.google.json
+    def load_is_memory(self, memory_path=None):
         if os.path.exists(memory_path):
             if IS_MEMORY_PATH.endswith('.json'):
-                dic = load_json(memory_path)
+                dic = load_json(memory_path, show_time=True)
             elif IS_MEMORY_PATH.endswith('.kari'): 
                 dic = load_kari(memory_path, show_time=True)
             for k, v in dic.items():
                 self.is_memory[k] = sorted(set(v + self.is_memory.get(k, [])))
             print(f"Loaded {len(dic.items())} items from {memory_path}")
 
-    def init_memory(self):
+    def init_is_memory(self):
         # load recorded google IME memory
         if os.path.exists(IS_MEMORY_PATH):  
-            self.load_memory(IS_MEMORY_PATH)
+            self.load_is_memory(IS_MEMORY_PATH)
         
         # mkdir for tmp files
         os.system(f"mkdir -p {TMP_DIR}")
 
     def load_ime_memory(self, ime_memory_path=None):
-        dic = load_json(ime_memory_path)
+        dic = load_json(ime_memory_path, show_time=True)
         self.ime_memory.update(dic)
         print(f"Loaded {len(dic.items())} items from {ime_memory_path}")
 
-    def init_google_ime(self):
+    def filter_ime_memory(self):
+        dic = {k: [(cand, rank_str) for cand, rank_str in v 
+                   if len(rank_str.split('-')) <= self.ime_max_selection_count] 
+               for k, v in self.ime_memory.items()}
+        self.ime_memory = dic
+        self.ime_save_flag = True
+        self.save_memory()
+
+    def init_ime_memory(self):
         # load recorded google IME memory
         if os.path.exists(IME_MEMORY_PATH):  # ime_memory.google.json
             self.load_ime_memory(IME_MEMORY_PATH)
@@ -103,7 +111,8 @@ class InputSequenceManager(object):
                 save_kari(self.is_memory, f"{TMP_DIR}/{fp}")
             else:
                 raise ValueError(f"Unknown file format: {fp}")
-            print(f"Saved ISM memory in {TMP_DIR}/{fp}.", time.ctime())
+            print(f"Saved IS memory in {TMP_DIR}/{fp}.", time.ctime())
+            self.is_save_flag = False
         
         if self.ime_save_flag or force:
             fp = IME_MEMORY_PATH.split('/')[-1]
@@ -120,7 +129,8 @@ class InputSequenceManager(object):
                 save_kari(self.ime_memory, f"{TMP_DIR}/{fp}")
             else:
                 raise ValueError(f"Unknown file format: {fp}")
-            print(f"Saved ISM memory in {TMP_DIR}/{fp}.", time.ctime())
+            print(f"Saved IME memory in {TMP_DIR}/{fp}.", time.ctime())
+            self.ime_save_flag = False
         
     def update_memory_from_tmp(self):
         fp = IS_MEMORY_PATH.split('/')[-1]
@@ -136,7 +146,7 @@ class InputSequenceManager(object):
 
     def py2phrase(self, pinyins):
         """
-        pinyins: list of pinyin
+        pinyins: list of complete pinyins
         return: list of Chinese words
         """
         res = self.ph_util.to_hanzi(
@@ -252,9 +262,14 @@ class InputSequenceManager(object):
                 _ret.append((c, f'{i}'))
                 continue
             _rest = input_sequence[matched_length[i]:]
-            for cand, rank_str in self._from_online_ime(
+
+            candidates_with_rank = self._from_online_ime(
                 _rest, method=method, heuristic=heuristic,
-                ngram=(ngram-1 if ngram is not None else ngram)):
+                ngram=(ngram-1 if ngram is not None else ngram))
+            
+            for cand, rank_str in candidates_with_rank:
+                if len(rank_str.split('-')) >= self.ime_max_selection_count:
+                    continue  # not recording too-long-selections such as 1-14-5-2
                 _ret.append((c + cand, f"{i}-{rank_str}"))
         
         return _ret
@@ -265,6 +280,7 @@ class InputSequenceManager(object):
         if ngram == 0:
             return []
         
+        _ret = []
         if input_sequence in self.ime_memory:
             # a list of (cand_str, rank_str) items
             _ret = self.ime_memory[input_sequence] 
@@ -299,6 +315,7 @@ class InputSequenceManager(object):
         if input_sequence in self.ime_memory:
             return self.ime_memory[input_sequence]
         # self.py2word() only takes complete pinyin lists.
+        print(f"Warning: [{input_sequence}] not in memory, ")
         candidates = self._from_online_ime(input_sequence, ngram=ngram)
         return candidates
 
@@ -307,7 +324,7 @@ class InputSequenceManager(object):
         pinyin, input_sequences = self.get_input_sequence(
             word=word, pinyin=pinyin, 
             simp_candidates=True)
-        self.save_memory()
+        # self.save_memory()
         return pinyin, input_sequences
 
 
@@ -316,4 +333,5 @@ if __name__ == "__main__":
     ret = ism._from_online_ime('chendian', ngram=2)
     print(ret)
     # ism.save_memory()
+    # ism.filter_ime_memory()
     ism.update_memory_from_tmp()

@@ -180,12 +180,13 @@ class Confusor(object):
         _inp = input_sequence
         self.confusor_cache.setdefault(_inp, {})
         if self.confusor_cache[_inp].get(ngram) is None:
-            candidates = self.ism.to_candidates(_inp, ngram=2)
+            candidates = self.ism.to_candidates(_inp, ngram=ngram)
             # save in cache 
             self.confusor_cache[_inp][ngram] = candidates
             self.save_flag_confusor = True
         else:
-            candidates = self.confusor_cache[_inp][ngram]
+            candidates = self.ism.to_candidates(_inp, ngram=ngram)  # for warm-up
+            # candidates = self.confusor_cache[_inp][ngram]
         return candidates
 
     def get_confusion_set(self, cand_pinyins, ngram=None, sort=True):
@@ -199,7 +200,7 @@ class Confusor(object):
                 rank = list(map(int, rank_str.split('-')))
                 if sum(rank) > 9:
                     continue
-                cfs[cand] = min(score + sum(rank) * 0.01, cfs.get(cand, 999))
+                cfs[cand] = min(score + sum(rank) * 0.1, cfs.get(cand, 999))
         if sort:
             ret = sorted(cfs.items(), key=lambda x: x[1])
         else:
@@ -215,7 +216,7 @@ class Confusor(object):
                 word=None, pinyin=[_py1], simp_candidates=True)
             for _sp in simpy:
                 red = self.refined_edit_distance(_py1, _sp, rate=False)
-                candidates = self.get_candidates(_sp, 1)
+                candidates = self.get_candidates(_sp, ngram=1)
         self.save_memory()
 
         for _py1 in tqdm(self.py_vocab):
@@ -228,8 +229,8 @@ class Confusor(object):
                 similiar_input_sequences = self.ism.get_input_sequence(
                     word=None, pinyin=[_py1, _py2], simp_candidates=True)
                 simpy = self.ism.simpy([_py1, _py2])
-                for _sp in simpy:
-                    candidates = self.get_candidates(_sp, 2)
+                for _sp in [_py1 + _py2] + simpy:
+                    candidates = self.get_candidates(_sp, ngram=2)
             self.save_memory()
 
     def save_memory(self):
@@ -238,14 +239,16 @@ class Confusor(object):
             save_pkl(
                 self.confusor_cache, 
                 self.path_to_confusor_cache)
+            print(f"Saved confusor memory in {self.path_to_confusor_cache}")
             self.save_flag_confusor = False
         if self.save_flag_red:
             save_pkl(
                 self.red_score_cache, 
                 self.path_to_red_score_cache)
+            print(f"Saved red memory in {self.path_to_red_score_cache}")
             self.save_flag_confusor = False
 
-    def __call__(self, word, context=None, has_mistyped=False, debug=None):
+    def __call__(self, word, context=None, has_mistyped=False, debug=None, return_score=False):
         """
         input a word, return its word-level confusion (a list of words).
         """
@@ -277,14 +280,17 @@ class Confusor(object):
         self.print(confusion_set)
         
         # select some of them as the output.
-        self.save_memory()
+        # self.save_memory()
+        if return_score:
+            return confusion_set
         return [k for k, v in confusion_set]
 
 
 if __name__ == "__main__":
     cfs = Confusor()
-    # ret = cfs('短裙')
+    # ret = cfs('短裙', return_score=True)
+    # print(cfs.timer)
     # print(ret)
-    # cfs.ism.update_memory_from_tmp()
     cfs.warmup_ism_memory()
     cfs.save_memory()
+    # cfs.ism.update_memory_from_tmp()

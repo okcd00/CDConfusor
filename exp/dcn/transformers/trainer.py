@@ -313,9 +313,11 @@ class Trainer:
         optimizer = AdamW(optimizer_grouped_parameters, 
                           lr=self.args.learning_rate, 
                           eps=self.args.adam_epsilon)
+        # 三角学习率
         scheduler = get_linear_schedule_with_warmup(
             optimizer, num_warmup_steps=self.args.warmup_steps, 
-            num_training_steps=num_training_steps, min_lr=self.args.min_lr
+            num_training_steps=num_training_steps, 
+            min_lr=self.args.min_lr
         )
         return optimizer, scheduler
 
@@ -343,7 +345,8 @@ class Trainer:
             # keep track of model topology and gradients, unsupported on TPU
             if not is_torch_tpu_available() and os.getenv("WANDB_WATCH") != "false":
                 wandb.watch(
-                    self.model, log=os.getenv("WANDB_WATCH", "gradients"), log_freq=max(100, self.args.logging_steps)
+                    self.model, log=os.getenv("WANDB_WATCH", "gradients"), 
+                    log_freq=max(100, self.args.logging_steps)
                 )
 
     def num_examples(self, dataloader: DataLoader) -> int:

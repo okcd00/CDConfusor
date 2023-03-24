@@ -519,12 +519,19 @@ class PathManager:
             handler._strict_kwargs_check = enable
 
 
-def load_json(fp):
+def load_json(fp, show_time=False):
     if not os.path.exists(fp):
+        print(f"Failed loading {fp} for file-not-existed.")
         return dict()
 
     with open(fp, 'r', encoding='utf8') as f:
-        return json.load(f)
+        if show_time:
+            start_time = time.time()
+            print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+        ret = json.load(f)
+        if show_time:
+            print(f"cost {round(time.time() - start_time, 3)} seconds.")
+        return ret
 
 
 def dump_json(obj, fp, debug=False, compress=True):
@@ -549,12 +556,13 @@ def dump_json(obj, fp, debug=False, compress=True):
 
 
 def load_vocab(fp, show_time=False):
+    if not os.path.exists(fp):
+        print(f"Failed loading {fp} for file-not-existed.")
+        return []
+    
     if show_time:
         start_time = time.time()
         print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
-    if not os.path.exists(fp):
-        print("Failed for file-not-existed.")
-        return None
     ret = [line.strip() for line in open(fp, 'r')]
     if show_time:
         print(f"cost {round(time.time() - start_time, 3)} seconds.")

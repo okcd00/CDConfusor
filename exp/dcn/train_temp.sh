@@ -2,8 +2,9 @@ set -v
 set -e
 
 # data files
+TRAIN_FILE=../data/tmp/findoc_train.230324.dcn.txt
 # TRAIN_FILE=../data/cn/Wang271k/dcn_train.dcn.txt
-TRAIN_FILE=../data/cn/findoc/findoc_test.v2.dcn.txt
+# TRAIN_FILE=../data/cn/findoc/findoc_test.v2.dcn.txt
 # TRAIN_FILE=../data/cn/rw/rw_test.dcn.txt
 SIGHAN_TEST_FILE=../data/cn/sighan15/sighan15_test.dcn.txt
 TEST_FILE=../data/cn/findoc/findoc_test.v2.dcn.txt
@@ -16,22 +17,25 @@ OUTPUT_DIR=dcn_models/findoc_finetuned_w271k_fd2/
 # for DCN_augc, 17007 steps/epoch, for 6GPU DCN_augw, 11338 steps/epoch
 # for DCN_train, when batch_size=8, 8794 steps/epoch; or bs=4, 17587 steps/epoch
 
+# fd_230324: 17813 steps/epoch on 4GPU (285013 samples)
 # W271k: 17587 steps/epoch on 4GPU
 # rw_v1: 273 steps/epoch
 # fd_v2: 1688 steps/epoch
 
-SAVE_STEPS=1688
+SAVE_STEPS=17813
 SEED=1038
 LR=5e-5
 SAVE_TOTAL_LIMIT=5
 MAX_LENGTH=192  # 128 for sighan, 192 for dcn-train
 BATCH_SIZE=4  # 8 will OOM for 192-text-len on 12G GPU
-NUM_EPOCHS=5
+NUM_EPOCHS=11
 
 
-CUDA_VISIBLE_DEVICES=7  python train_DCN.py \
+CUDA_VISIBLE_DEVICES=1,2,3,4  python train_DCN.py \
     --output_dir $OUTPUT_DIR \
 	--learning_rate $LR  \
+    --warmup_steps $SAVE_STEPS \
+    --min_lr 1e-6 \
     --per_device_train_batch_size $BATCH_SIZE \
     --model_type=bert \
     --model_name_or_path $BERT_MODEL \
