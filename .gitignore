@@ -16,6 +16,7 @@ infer_model/
 *.bin
 runs/
 dcn_model*/
+cd_model*/
 wandb/
 chinese-roberta-wwm-ext/
 Wang271*/

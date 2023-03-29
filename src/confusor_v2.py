@@ -28,6 +28,8 @@ from paths import (
     to_path,
     CONFUSION_PATH, RED_SCORE_PATH,
     VOCAB_PATH, CHAR_PY_VOCAB_PATH,
+    PATH_FREQ_GNR_CHAR, PATH_FREQ_GNR_WORD,
+    PATH_FREQ_FIN_CHAR, PATH_FREQ_FIN_WORD,
     SCORE_DATA_DIR, EMBEDDING_PATH)
 
 # utils
@@ -45,6 +47,7 @@ from src.confusor_utils import (
 
 
 class Confusor(object):
+    IME_PAGE_SIZE = 8
     RED_THRESHOLD = 0.4
     PUNC_LIST = "，；。？！…"
 
@@ -63,6 +66,7 @@ class Confusor(object):
 
         # data loader
         self._load_confusor_data()
+        self._load_frequency_data()
 
         # to obtain input sequences
         self.ism = InputSequenceManager()
@@ -83,6 +87,17 @@ class Confusor(object):
         if os.path.exists(self.path_to_confusor_cache):
             self.confusor_cache = load_pkl(self.path_to_confusor_cache)
             print(f"Loaded {len(self.confusor_cache)} items from {self.path_to_confusor_cache}")
+
+    def _load_frequency_data(self):
+        self.freq_general_char = load_pkl(PATH_FREQ_GNR_CHAR)
+        self.freq_general_word = load_pkl(PATH_FREQ_GNR_WORD)
+        self.freq_findoc_char = load_pkl(PATH_FREQ_FIN_CHAR)
+        self.freq_findoc_word = load_pkl(PATH_FREQ_FIN_WORD)
+        if None in [self.freq_general_char, self.freq_general_word, 
+                    self.freq_findoc_char, self.freq_findoc_word]:
+            self.frequency_loaded = False
+        else:
+            self.frequency_loaded = True
 
     def record_time(self, information):
         """
@@ -135,6 +150,7 @@ class Confusor(object):
         @param seq2: a list of pinyin strings
         @return: the red score of the two sequences
         """
+        # lower is better candidate
         if (seq1 in self.py_vocab) and (seq2 in self.py_vocab):
             try:
                 return self.red_score[seq1][seq2]
@@ -185,22 +201,62 @@ class Confusor(object):
             self.confusor_cache[_inp][ngram] = candidates
             self.save_flag_confusor = True
         else:
-            candidates = self.ism.to_candidates(_inp, ngram=ngram)  # for warm-up
-            # candidates = self.confusor_cache[_inp][ngram]
+            # candidates = self.ism.to_candidates(_inp, ngram=ngram)  # for warm-up
+            candidates = self.confusor_cache[_inp][ngram]
         return candidates
+    
+    def get_frequency_score(self, phrase, source='general'):
+        # higher is better candidate
+        score = 0.
+        if not self.frequency_loaded:
+            return score
+        if len(phrase) == 1:
+            gnr_score = self.freq_general_char.get(phrase, 0.)
+            fin_score = self.freq_findoc_char.get(phrase, 0.)
+            if source in ['general', 'gnr']:
+                return gnr_score
+            if source in ['findoc', 'fin']:
+                return fin_score
+            if source in ['delta']:
+                if gnr_score > fin_score > 0: 
+                    score = gnr_score - fin_score  # delta
+                elif fin_score > .8 and gnr_score > .8:
+                    score = max(gnr_score, fin_score)  # max
+        else:
+            gnr_score_char = self.freq_general_char.get(phrase, 0.)
+            gnr_score_word = self.freq_general_word.get(phrase, 0.)
+            fin_score_char = self.freq_findoc_char.get(phrase, 0.)
+            fin_score_word = self.freq_findoc_word.get(phrase, 0.)
+        return score
 
+    def get_ime_rank_score(self, rank=None, rank_str=None, old_version=True):
+        # lower is better candidate
+        if rank_str is not None:
+            rank = list(map(int, rank_str.split('-')))
+        if old_version:
+            return sum(rank) * 0.1
+        if len(rank) == 1:  # with one selection
+            rank_penity = rank[0] // self.IME_PAGE_SIZE * 0.1
+        else:
+            rank_penity = sum(rank) * 0.01
+        return -rank_penity
+    
     def get_confusion_set(self, cand_pinyins, ngram=None, sort=True):
         """
         @param pinyins: a list of (pinyin string, score) pairs
         @return: a list of (phrase string, score) pairs.
         """
         cfs = {}
-        for py, score in cand_pinyins:
-            for cand, rank_str in self.ism.to_candidates(py, ngram=ngram):
-                rank = list(map(int, rank_str.split('-')))
-                if sum(rank) > 9:
-                    continue
-                cfs[cand] = min(score + sum(rank) * 0.1, cfs.get(cand, 999))
+        for py, pinyin_distance in cand_pinyins:
+            # cand_list = self.ism.to_candidates(py, ngram=ngram)
+            cand_list = self.get_candidates(py, ngram=ngram)
+            for cand, rank_str in cand_list:
+                rank_penity = self.get_ime_rank_score(rank_str=rank_str)
+                if rank_penity > 0.9: continue
+                # if self.frequency_loaded:
+                #     freq_score = self.get_frequency_score(cand)
+                cfs[cand] = min(pinyin_distance + rank_penity, 
+                                cfs.get(cand, 999))
         if sort:
             ret = sorted(cfs.items(), key=lambda x: x[1])
         else:
@@ -208,6 +264,8 @@ class Confusor(object):
         return ret
 
     def warmup_ism_memory(self):
+        # pre-calculate, save in memory files.
+
         for _py1 in tqdm(self.py_vocab):
             if _py1.startswith('['):
                 continue
