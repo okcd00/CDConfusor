@@ -95,6 +95,10 @@ class Confusor(object):
         self.freq_findoc_word = load_pkl(PATH_FREQ_FIN_WORD)
         if None in [self.freq_general_char, self.freq_general_word, 
                     self.freq_findoc_char, self.freq_findoc_word]:
+            self.freq_general_char = self.freq_general_char or {}
+            self.freq_general_word = self.freq_general_word or {}
+            self.freq_findoc_char = self.freq_findoc_char or {}
+            self.freq_findoc_word = self.freq_findoc_word or {}
             self.frequency_loaded = False
         else:
             self.frequency_loaded = True
@@ -213,20 +217,29 @@ class Confusor(object):
         if len(phrase) == 1:
             gnr_score = self.freq_general_char.get(phrase, 0.)
             fin_score = self.freq_findoc_char.get(phrase, 0.)
-            if source in ['general', 'gnr']:
-                return gnr_score
-            if source in ['findoc', 'fin']:
-                return fin_score
-            if source in ['delta']:
-                if gnr_score > fin_score > 0: 
-                    score = gnr_score - fin_score  # delta
-                elif fin_score > .8 and gnr_score > .8:
-                    score = max(gnr_score, fin_score)  # max
         else:
             gnr_score_char = self.freq_general_char.get(phrase, 0.)
             gnr_score_word = self.freq_general_word.get(phrase, 0.)
+            if gnr_score_char < 0.5 or gnr_score_word < 0.5:
+                gnr_score = max(gnr_score_char, gnr_score_word)
+            else:  # harmonic mean
+                gnr_score = 1./ (1. / gnr_score_char + 1./ gnr_score_word)
             fin_score_char = self.freq_findoc_char.get(phrase, 0.)
             fin_score_word = self.freq_findoc_word.get(phrase, 0.)
+            if fin_score_char < 0.5 or fin_score_word < 0.5:
+                fin_score = max(fin_score_char, fin_score_word)
+            else:  # harmonic mean
+                fin_score = 1./ (1. / fin_score_char + 1./ fin_score_word)
+        # return score value for ranking, from these scores        
+        if source in ['general', 'gnr']:
+            return gnr_score
+        if source in ['findoc', 'fin']:
+            return fin_score
+        if source in ['delta']:
+            if gnr_score > fin_score > 0.: 
+                score = gnr_score - fin_score  # delta
+            elif fin_score > .8 and gnr_score > .8:
+                score = max(gnr_score, fin_score)  # max
         return score
 
     def get_ime_rank_score(self, rank=None, rank_str=None, old_version=True):
@@ -238,7 +251,7 @@ class Confusor(object):
         if len(rank) == 1:  # with one selection
             rank_penity = rank[0] // self.IME_PAGE_SIZE * 0.1
         else:
-            rank_penity = sum(rank) * 0.01
+            rank_penity = sum([1. - (i / (r+1)) for i, r in enumerate(rank)]) * 0.01
         return -rank_penity
     
     def get_confusion_set(self, cand_pinyins, ngram=None, sort=True):
@@ -251,7 +264,7 @@ class Confusor(object):
             # cand_list = self.ism.to_candidates(py, ngram=ngram)
             cand_list = self.get_candidates(py, ngram=ngram)
             for cand, rank_str in cand_list:
-                rank_penity = self.get_ime_rank_score(rank_str=rank_str)
+                rank_penity = self.get_ime_rank_score(rank_str=rank_str)  # negative value
                 if rank_penity > 0.9: continue
                 # if self.frequency_loaded:
                 #     freq_score = self.get_frequency_score(cand)
@@ -346,9 +359,9 @@ class Confusor(object):
 
 if __name__ == "__main__":
     cfs = Confusor()
-    # ret = cfs('短裙', return_score=True)
-    # print(cfs.timer)
+    ret = cfs('短裙', return_score=True)
+    print(cfs.timer)
     # print(ret)
-    cfs.warmup_ism_memory()
-    cfs.save_memory()
+    # cfs.warmup_ism_memory()
+    # cfs.save_memory()
     # cfs.ism.update_memory_from_tmp()

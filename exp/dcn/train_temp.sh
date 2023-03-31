@@ -2,8 +2,8 @@ set -v
 set -e
 
 # data files
-TRAIN_FILE=../data/tmp/findoc_train.230329.mp.dcn.txt
-# TRAIN_FILE=../data/cn/Wang271k/dcn_train.dcn.txt
+# TRAIN_FILE=../data/tmp/findoc_train.230329.dcn.txt
+TRAIN_FILE=../data/cn/Wang271k/dcn_train.mp.dcn.txt
 # TRAIN_FILE=../data/cn/findoc/findoc_test.v2.dcn.txt
 # TRAIN_FILE=../data/cn/rw/rw_test.dcn.txt
 SIGHAN_TEST_FILE=../data/cn/sighan15/sighan15_test.dcn.txt
@@ -12,8 +12,8 @@ TEST_FILE=../data/cn/rw/rw_test.dcn.txt
 
 # --model_name_or_path $WARMUP_DIR (modified roberta vocab)
 BERT_MODEL=../pretrained_models/chinese-roberta-wwm-ext/
-WARMUP_DIR=dcn_models/findoc_finetuned_w271k_fd0326/
-OUTPUT_DIR=cd_models/findoc_finetuned_w271k+fd2/
+WARMUP_DIR=cd_models/findoc_finetuned_w271k+fd2/
+OUTPUT_DIR=cd_models/findoc_finetuned_w271k.mp/
 
 # for DCN_augc, 17007 steps/epoch, for 6GPU DCN_augw, 11338 steps/epoch
 # for DCN_train, when batch_size=8, 8794 steps/epoch; or bs=4, 17587 steps/epoch
@@ -26,7 +26,7 @@ OUTPUT_DIR=cd_models/findoc_finetuned_w271k+fd2/
 # rw_v1: 273 steps/epoch
 # fd_v2: 1688 steps/epoch
 
-SAVE_STEPS=34923
+SAVE_STEPS=136048
 SEED=1038
 LR=5e-5
 SAVE_TOTAL_LIMIT=5
@@ -35,7 +35,7 @@ BATCH_SIZE=4  # 8 will OOM for 192-text-len on 12G GPU
 NUM_EPOCHS=10
 
 
-CUDA_VISIBLE_DEVICES=1,2,3,4  python train_DCN.py \
+CUDA_VISIBLE_DEVICES=5  python train_DCN.py \
     --output_dir $OUTPUT_DIR \
 	--learning_rate $LR  \
     --warmup_steps $SAVE_STEPS \
@@ -58,3 +58,6 @@ CUDA_VISIBLE_DEVICES=1,2,3,4  python train_DCN.py \
     --seed $SEED \
     --mlm --mlm_probability 0.15 \
     --overwrite_output_dir
+
+
+cp ./train_temp.sh $OUTPUT_DIR/train_temp.sh

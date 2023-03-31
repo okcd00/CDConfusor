@@ -233,15 +233,20 @@ class Inference(object):
 
 
 def main():
+
+    # 'cd_models/findoc_finetuned_w271k+cctc+fd2.mp/'
+    # 'dcn_models/findoc_finetuned_w271k/'
     instance = Inference(
-        model_path='dcn_models/findoc_finetuned_w271k_fd2/checkpoint-3376/')
+        model_path='dcn_models/findoc_finetuned_w271k/')
     # input_lines, truth_lines = 
     # instance.evaluate_bad_cases(input_lines, truth_lines)
     results = {}
 
     path_to_test_files = {
         'rw': '../data/cn/rw/rw_test.tsv',
-        'rd2': '../data/cn/findoc/findoc_test.v2.tsv',
+        'cctc': '../data/cn/cctc/cctc_test.tsv',
+        'fd1': '../data/cn/findoc/findoc_test.v1.tsv',
+        'fd2': '../data/cn/findoc/findoc_test.v2.tsv',
         'sighan': '../data/cn/sighan15/sighan15_test.tsv',
         'w271k': '../data/cn/Wang271k/dcn_train.tsv',
     }
@@ -250,11 +255,11 @@ def main():
         p, r, f, acc = instance.evaluate_on_tsv(path_to_test_files[key])
         results[key] = (p, r, f, acc)
 
-    for key in ['rw', 'rd2', 'sighan', 'w271k']:
+    for key in ['fd1', 'rw']:  # ['rw', 'fd1', 'fd2', 'sighan', 'cctc']:
         check_on(key)
     print(results)
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
     main()
