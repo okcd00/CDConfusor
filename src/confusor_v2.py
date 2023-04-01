@@ -359,7 +359,7 @@ class Confusor(object):
 
 if __name__ == "__main__":
     cfs = Confusor()
-    ret = cfs('短裙', return_score=True)
+    ret = cfs('紧急', return_score=True)
     print(cfs.timer)
     # print(ret)
     # cfs.warmup_ism_memory()

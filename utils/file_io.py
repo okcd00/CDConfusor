@@ -613,6 +613,7 @@ def load_pkl(fp, show_time=False):
     if show_time:
         start_time = time.time()
         print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+        sys.stdout.flush()
     if not os.path.exists(fp):
         print("Failed for file-not-existed.")
         return None
