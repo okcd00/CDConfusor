@@ -53,6 +53,8 @@ class InputSequenceManager(object):
         self.is_save_flag = False
         self.ime_memory = {}  # input_sequence -> [(word, rank-chain), ...]
         self.ime_save_flag = False
+        self.ime_update_count = 0
+        self.update_to_save = 100
         self.ime_candidate_count = 20
         self.ime_max_selection_count = 3
         self.init_is_memory()  
@@ -90,6 +92,7 @@ class InputSequenceManager(object):
                for k, v in self.ime_memory.items()}
         self.ime_memory = dic
         self.ime_save_flag = True
+        self.ime_update_count += 1
         self.save_memory()
 
     def init_ime_memory(self):
@@ -131,6 +134,7 @@ class InputSequenceManager(object):
                 raise ValueError(f"Unknown file format: {fp}")
             print(f"Saved IME memory in {TMP_DIR}/{fp}.", time.ctime())
             self.ime_save_flag = False
+            self.ime_update_count = 0
         
     def update_memory_from_tmp(self):
         fp = IS_MEMORY_PATH.split('/')[-1]
@@ -303,6 +307,9 @@ class InputSequenceManager(object):
             # update memory
             self.ime_memory[input_sequence] = _ret
             self.ime_save_flag = True
+            self.ime_update_count += 1
+            if self.ime_update_count > self.update_to_save:
+                self.save_memory()
 
         # output candidates with n-gram
         if ngram is not None:

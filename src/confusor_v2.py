@@ -199,7 +199,8 @@ class Confusor(object):
         """
         _inp = input_sequence
         self.confusor_cache.setdefault(_inp, {})
-        if self.confusor_cache[_inp].get(ngram) is None:
+        record = self.confusor_cache[_inp].get(ngram)
+        if record is None or len(record) == 0:
             candidates = self.ism.to_candidates(_inp, ngram=ngram)
             # save in cache 
             self.confusor_cache[_inp][ngram] = candidates

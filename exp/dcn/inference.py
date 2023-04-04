@@ -236,8 +236,8 @@ def main():
 
     # 'cd_models/findoc_finetuned_w271k+cctc+fd2.mp/'
     # 'dcn_models/findoc_finetuned_w271k/'
-    instance = Inference(
-        model_path='dcn_models/findoc_finetuned_w271k/')
+    model_path='cd_models/findoc_finetuned_w271k_rd2/'
+    instance = Inference(model_path=model_path)
     # input_lines, truth_lines = 
     # instance.evaluate_bad_cases(input_lines, truth_lines)
     results = {}
@@ -255,11 +255,16 @@ def main():
         p, r, f, acc = instance.evaluate_on_tsv(path_to_test_files[key])
         results[key] = (p, r, f, acc)
 
-    for key in ['fd1', 'rw']:  # ['rw', 'fd1', 'fd2', 'sighan', 'cctc']:
+    for key in ['sighan', 'cctc', 'rw', 'fd1', 'fd2']:
         check_on(key)
     print(results)
 
+    print(model_path.split('/')[1])
+    for k, v in results.items():
+        v = map(str, v)
+        print('\t'.join(v), end='\t')
+
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "7"
     main()
