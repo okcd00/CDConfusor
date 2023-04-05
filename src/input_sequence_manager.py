@@ -56,7 +56,7 @@ class InputSequenceManager(object):
         self.ime_update_count = 0
         self.update_to_save = 100
         self.ime_candidate_count = 20
-        self.ime_max_selection_count = 3
+        self.ime_max_selection_count = 2
         self.init_is_memory()  
         self.init_ime_memory()
 
@@ -92,7 +92,6 @@ class InputSequenceManager(object):
                for k, v in self.ime_memory.items()}
         self.ime_memory = dic
         self.ime_save_flag = True
-        self.ime_update_count += 1
         self.save_memory()
 
     def init_ime_memory(self):
@@ -339,6 +338,6 @@ if __name__ == "__main__":
     ism = InputSequenceManager()
     ret = ism._from_online_ime('chendian', ngram=2)
     print(ret)
+    ism.filter_ime_memory()
     # ism.save_memory()
-    # ism.filter_ime_memory()
     ism.update_memory_from_tmp()

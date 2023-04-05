@@ -248,6 +248,8 @@ class Confusor(object):
         if rank_str is not None:
             rank = list(map(int, rank_str.split('-')))
         if old_version:
+            if len(rank) > 2:
+                return 0.999
             return sum(rank) * 0.1
         if len(rank) == 1:  # with one selection
             rank_penity = rank[0] // self.IME_PAGE_SIZE * 0.1
@@ -336,6 +338,8 @@ class Confusor(object):
         self.record_time('get pinyin list')
         self.print(pinyins)
         if pinyins is None:
+            if return_score:
+                return [(word, 0.)]
             return [word]  # return itself if not a Chinese word
 
         # get simliar pinyin sequences of the word

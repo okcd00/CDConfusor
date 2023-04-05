@@ -528,6 +528,7 @@ def load_json(fp, show_time=False):
         if show_time:
             start_time = time.time()
             print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+            sys.stdout.flush()
         ret = json.load(f)
         if show_time:
             print(f"cost {round(time.time() - start_time, 3)} seconds.")
@@ -563,6 +564,7 @@ def load_vocab(fp, show_time=False):
     if show_time:
         start_time = time.time()
         print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+        sys.stdout.flush()
     ret = [line.strip() for line in open(fp, 'r')]
     if show_time:
         print(f"cost {round(time.time() - start_time, 3)} seconds.")
@@ -588,6 +590,7 @@ def load_kari(fp, show_time=False):
     if show_time:
         start_time = time.time()
         print(f"Loading {fp.split('/')[-1]} ({get_filesize(fp)}MB)", end=' ')
+        sys.stdout.flush()
     if not os.path.exists(fp):
         print("Failed for file-not-existed.")
         return None
