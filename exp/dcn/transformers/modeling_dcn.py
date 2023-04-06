@@ -534,7 +534,7 @@ class BertPredictionHeadTransform(nn.Module):
         return hidden_states
 
 
-class BertLMPredictionHead(nn.Module):
+class BertLMPredictionHead(nn.Module):  # @okcd00: custom pinyin mapping here
     def __init__(self, config):
         super().__init__()
         self.LayerNorm = BertLayerNorm(config.hidden_size,
@@ -546,7 +546,7 @@ class BertLMPredictionHead(nn.Module):
         with open(config.pinyin_mapping_path) as f:
             for line in f:
                 items = line.strip().split()
-                self.word_pinyin_idx.append(int(items[1]))
+                self.word_pinyin_idx.append(int(items[1]))  # @okcd00 now only 1 pinyin for each token
         self.word_pinyin_idx = torch.tensor(self.word_pinyin_idx,
                                             device="cuda")
 
@@ -564,7 +564,7 @@ class BertLMPredictionHead(nn.Module):
         self.decoder.bias = self.bias
         self.conv1 = nn.Conv1d(in_channels=config.hidden_size,
                                out_channels=config.hidden_size,
-                               kernel_size=3,
+                               kernel_size=3,  # @okcd00: expand kernel_size for bigger model
                                padding=1)
 
     def forward(self, hidden_states, input_ids=None, pinyin_ids=None):
@@ -612,7 +612,7 @@ class BertPreTrainingHeads(nn.Module):
                 sequence_output,
                 pooled_output,
                 input_ids=None,
-                pinin_ids=None):
+                pinyin_ids=None):  # @okcd00: typo here.
         prediction_scores = self.predictions(sequence_output,
                                              input_ids=input_ids,
                                              pinyin_ids=pinyin_ids)

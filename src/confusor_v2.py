@@ -82,10 +82,10 @@ class Confusor(object):
 
         # load red scores & confusor for longer phrases
         if os.path.exists(self.path_to_red_score_cache):
-            self.red_score_cache = load_pkl(self.path_to_red_score_cache)
+            self.red_score_cache = load_pkl(self.path_to_red_score_cache, show_time=True)
             print(f"Loaded {len(self.red_score_cache)} items from {self.path_to_red_score_cache}")
         if os.path.exists(self.path_to_confusor_cache):
-            self.confusor_cache = load_pkl(self.path_to_confusor_cache)
+            self.confusor_cache = load_pkl(self.path_to_confusor_cache, show_time=True)
             print(f"Loaded {len(self.confusor_cache)} items from {self.path_to_confusor_cache}")
 
     def _load_frequency_data(self):
