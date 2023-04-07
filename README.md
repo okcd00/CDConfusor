@@ -6,20 +6,17 @@
 ### Overview
 
 **Confusor is a retrieval-based module for the word-level confusion-set generation.** 
-This module retrieves the required confusion-set for a target word from more than 12 million Chinese words. 
-
+This module retrieves the required confusion-set for a target word from Chinese words. 
 
 Confusor applies the two-step retrieval: **pinyin retrieval** and **word retrieval**. In the pinyin retrieval step, confusor retrieves most similar pinyin sequences from a large pinyin sequence corpus by the **refined edit distance (RED) algorithm**, which uses two manually-set transition matrices to model the effects of typical errors such as fuzzy tones and keyboard mistouch. Then the set of candidate words can be easily obtained. In the word retrieval step, confusor further computes a weighted score to retrieve words in a small confusion-set from the large set of candidate words.
 
 ![image-20210806161749207](./docs/overview.png)
-However, the pinyin retrieval step is time-consuming. Three retrieval methods are proposed to address this issue: **two-stage retrieval, DCC retrieval, beam search retrieval.**
-
 See `/docs/confset.pdf` for more details.
 
 
 ### Usage
 
-#### 1. Preparing
+#### File Preparing
 
 + Set the path to the repo/data directory in `paths.py`.
   + `REPO_DIR = '/home/chendian/CDConfusor'`
@@ -29,43 +26,31 @@ See `/docs/confset.pdf` for more details.
   + call `untar()` in `confusor/preprocess_tx_embeddings.py`
   + a new directory `$CONFUSOR_DATA_DIR/tx_embeddings` will be created.
 + Call the script to generate bucketing corpus-file by word-length.
-  + call `bucket_by_length()` in `confusor/preprocess_tx_embeddings.py`
+  + call `bucket_by_length()` in `src/preprocess_tx_embeddings.py`
     + `$CONFUSOR_DATA_DIR/tx_embeddings/*gram.pkl` will be created.
 + Call the script to generate scores for `input_sequence`
-  + call `main()` in `confusor/preprocess_red_matrix.py`
+  + call `main()` in `src/preprocess_red_matrix.py`
     + set pre-defined weights for calculating RED (Refined Edit-Distance) in `main()`.
     + a new directory called `$CONFUSOR_DATA_DIR/score_data` will be created.
     + in this dir, a file called `red_score.info` will be created to record the weights.
-+ TODO: more steps for other inter-mediate files.
++ call the warm-up script in `src/confusor_v2.py`
+  + It caches memory files `IME records` for `src/input_sequence_manager.py`
+    + `cfs.warmup_ism_memory()` records IME results in `$TMP_DIR/ime_memory.json`
+    + `cfs.ism.update_memory_from_tmp()` dumps IME memory files in `data/ime_memory.json`
+  + It caches memory files `CFS records` in `src/confusor_v2.py`
+    + `cfs.save_memory()` dumps confusion sets in `data/cfs_cache.pkl` 
 
 
-#### 2. Initialization
 
-```
-conf = Confusor(method='beam', pinyin_sample_mode='special', token_sample_mode='sort', weight=[1, 0.5, 1])
-```
-
-**Parameters:**
-
-| Param                | Note                              | Option                                 |
-| -------------------- | --------------------------------- | -------------------------------------- |
-| `method`             | pinyin sequence retrieval method. | 'baseline', 'two-stage', 'dcc', 'beam' |
-| `pinyin_sample_mode` | pinyin sequence sampling mode.    | 'sort', 'random', 'special'            |
-| `token_sample_mode`  | word sampling mode.               | 'sort', 'random'                       |
-
-Use `weight` to adjust the weight of the RED score, cosine similarity score and frequency score for a word respectively.
-
-See [confusor.py](confusor/confusor_v2.py) for more details.
-
-
-#### 3. Call the Confusor!
+#### Call the Confusor
 
 ```
-conf('世界')
+cfs = Confusor(return_size=10, debug=False)
+# ret = cfs('世界', return_score=True)
+ret = cfs('世界')
 ```
 
 Then you can get the confusion-set of size 10 as follows:
-
 ```
 ['实际', '视界', '世纪', '世届', '十届', '十界', '视觉', '事界', '四届', '时节']
 ```
@@ -107,32 +92,81 @@ Datasets come form this [repo](https://github.com/anonymous/realworld_chinese_ty
 #### DCN
 > Among the CSC models without pretraining on external corpus, [**DCN**](exp/dcn/README.md) is the top CSC model using dynamic connections between candidates on adjacent tokens.           
 
-**train**
+
+**train** 
 
 ``` bash
 # sh train.sh
-
 set -v
 set -e
 
-TASK=sighan15
-MODEL_DIR=dcn_models/wsw5_train_model_192/
+# --------------
+# | data files |
+# --------------
 
-INPUT_FILE=../data/cn/$TASK/${TASK}_test.sighan.txt
-DCN_FILE=../data/cn/$TASK/${TASK}_test.dcn.txt
-OUTPUT_FILE=$MODEL_DIR/output_${TASK}.txt
-MAX_LENGTH=192
-BATCH_SIZE=4
+TRAIN_FILE=../data/fin/findoc_train.230406.dcn.txt  # findoc-corpus: 7680964
+TEST_FILE=../data/cn/rw/rw_test.dcn.txt
+SIGHAN_TEST_FILE=../data/cn/sighan15/sighan15_test.dcn.txt
 
-CUDA_VISIBLE_DEVICES=1 python predict_DCN.py \
-    --model $MODEL_DIR \
-    --input_file $INPUT_FILE \
-    --output_file $OUTPUT_FILE \
-    --batch_size $BATCH_SIZE \
-	--max_len $MAX_LENGTH 
+# --model_name_or_path $WARMUP_DIR (modified roberta vocab)
+BERT_MODEL=../pretrained_models/chinese-roberta-wwm-ext/
+WARMUP_DIR=cd_models/findoc_finetuned_w271k/
+OUTPUT_DIR=cd_models/findoc_finetuned_230406/
 
+mkdir -p $OUTPUT_DIR
+cp ./train_temp.sh $OUTPUT_DIR/train_temp.sh
 
-python evaluate.py $DCN_FILE $OUTPUT_FILE 
+# --------------
+# | configs    |
+# --------------
+
+# model hyper-parameters
+SEED=1038
+LR=5e-5
+MIN_LR=2e-6
+SAVE_TOTAL_LIMIT=5
+MAX_LENGTH=192  # 128 for sighan, 192 for dcn-train
+BATCH_SIZE=4  # 4 for 192-text-len on 12G GPU, 12 for 192-text-len on 24G GPU
+NUM_EPOCHS=10
+WARMUP_STEPS=0
+
+# custom settings for training
+GPUS=0,1,2,3
+DATASET_LINES=7680964
+GPU_COUNT=$(echo $GPUS | tr -cd "[0-9]" | wc -c)
+SAVE_STEPS=$(echo "$DATASET_LINES/$GPU_COUNT/$BATCH_SIZE+1" | bc)
+echo "In this run, SAVE_STEPS is $SAVE_STEPS"
+
+# --------------
+# | RUN !!!    |
+# --------------
+
+# run the command
+WANDB_PROJECT=findoc_csc_finetuning CUDA_VISIBLE_DEVICES=$GPUS python train_DCN.py \
+    --output_dir $OUTPUT_DIR \
+    --per_device_train_batch_size $BATCH_SIZE \
+    --learning_rate $LR  \
+    --min_lr $MIN_LR \
+    --warmup_steps $WARMUP_STEPS \
+    --model_type=bert \
+    --model_name_or_path $BERT_MODEL \
+    --num_train_epochs $NUM_EPOCHS \
+    --save_steps $SAVE_STEPS \
+    --save_total_limit $SAVE_TOTAL_LIMIT \
+	--logging_steps $SAVE_STEPS \
+    --logging_first_step \
+	--block_size $MAX_LENGTH \
+    --train_data_file $TRAIN_FILE \
+    --eval_data_file $SIGHAN_TEST_FILE \
+    --test_data_file $TEST_FILE \
+    --seed $SEED \
+    --do_train \
+    --do_eval \
+    --do_predict \
+	--evaluate_during_training \
+    --evaluate_during_mlm \
+    --mlm --mlm_probability 0.15 \
+    --overwrite_output_dir
 ```
 
 **infer**

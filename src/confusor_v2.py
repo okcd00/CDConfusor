@@ -51,10 +51,11 @@ class Confusor(object):
     RED_THRESHOLD = 0.4
     PUNC_LIST = "，；。？！…"
 
-    def __init__(self, debug=False):
+    def __init__(self, return_size=-1, debug=False):
         # for debugging
         self.debug = debug
         self.timer = []
+        self.return_size = return_size
 
         # cache for faster function call on phrases
         self.confusor_cache = {}  # input_str: {word_size: list of words}
@@ -357,6 +358,8 @@ class Confusor(object):
         
         # select some of them as the output.
         # self.save_memory()
+        if self.return_size > 0:
+            confusion_set = confusion_set[:self.return_size]
         if return_score:
             return confusion_set
         return [k for k, v in confusion_set]
@@ -369,4 +372,4 @@ if __name__ == "__main__":
     # print(ret)
     # cfs.warmup_ism_memory()
     # cfs.save_memory()
-    # cfs.ism.update_memory_from_tmp()
+    cfs.ism.update_memory_from_tmp()

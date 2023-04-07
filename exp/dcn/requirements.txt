@@ -5,3 +5,4 @@ sentencepiece
 sacremoses
 filelock
 requests
+wandb
