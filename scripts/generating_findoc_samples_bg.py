@@ -21,7 +21,7 @@ generated_n_lines = 0
 
 sampled_words = {}  # word: int(times)
 sampled_candidates = {}  # word: set(candidates)
-path_to_sampled_history = None  # '../exp/data/fin/findoc_augw.230405.sampled_candidates.txt'
+path_to_sampled_history = '../exp/data/fin/findoc_augw.230406.sampled_candidates.txt'
 if path_to_sampled_history and os.path.exists(path_to_sampled_history):
     for idx, line in enumerate(open(path_to_sampled_history, 'r')):
         if idx == 0:
@@ -115,7 +115,7 @@ def piece_confusor_cfs(word, random_select=True, piece_size=2):
 import Pinyin2Hanzi
 from tqdm import tqdm
 
-DATE_STAMP = '230406'
+DATE_STAMP = '230407'
 PATH_TO_CORPUS = '/data/chendian/csc_findoc_corpus/unique_text_lines.220803.txt'
 lines = [line.strip() for line in open(PATH_TO_CORPUS, 'r')]
 
@@ -179,4 +179,5 @@ with open(f'../exp/data/fin/findoc_augw.{DATE_STAMP}.sampled_candidates.txt', 'w
         c = str(sampled_words.get(k, 0))
         f2.write(f"{k}\t{' '.join(v)}\t{c}\n")
     print(len(sampled_candidates), 'kinds of words are saved.')
+
 cfs.save_memory()

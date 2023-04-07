@@ -167,9 +167,10 @@ class InputSequenceManager(object):
             pinyin = [p[0] for p in pinyin]
         input_sequences = []
         for simp_idx, _ in enumerate(pinyin):
-            input_sequences.append(''.join(
+            _sp = ''.join(
                 [py[0] if idx >= simp_idx else py 
-                 for idx, py in enumerate(pinyin)]))
+                 for idx, py in enumerate(pinyin)])
+            input_sequences.append(_sp)
         return input_sequences
 
     def get_similar_input_sequences(self, pinyin):
@@ -184,12 +185,14 @@ class InputSequenceManager(object):
                 return pinyin
         input_sequences = set()
         input_sequences.add(''.join(pinyin))
+        # if len(pinyin) > 1 and pinyin[-1] == 'e':
+        #     input_sequences.extend(self.get_similar_input_sequences(pinyin))
         # errors in single Chinese character
         for err_idx, err_py in enumerate(pinyin):
             for py_cand in self.py_mapping[err_py]:
-                input_sequences.add(
-                    f''.join([py_cand if idx == err_idx else py 
-                              for idx, py in enumerate(pinyin)]))
+                _py = f''.join([py_cand if idx == err_idx else py 
+                               for idx, py in enumerate(pinyin)])
+                input_sequences.add(_py)
         for _sp in self.simpy(pinyin):
             input_sequences.add(_sp)
         return sorted(input_sequences)
@@ -336,8 +339,8 @@ class InputSequenceManager(object):
 
 if __name__ == "__main__":
     ism = InputSequenceManager()
-    ret = ism._from_online_ime('chendian', ngram=2)
+    ret = ism._from_online_ime("yu'e", ngram=2)
     print(ret)
-    ism.filter_ime_memory()
+    # ism.filter_ime_memory()
     # ism.save_memory()
     ism.update_memory_from_tmp()
