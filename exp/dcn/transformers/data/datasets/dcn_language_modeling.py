@@ -24,7 +24,7 @@ class PinyinShuffleLineByLineTextDataset(Dataset):
                  block_size: int,
                  shuffle=True):
         shuffle = False
-        print(file_path, os.path.isfile(file_path))
+        # print(file_path, os.path.isfile(file_path))
         assert os.path.isfile(file_path)
         # Here, we do not cache the features, operating under the assumption
         # that we will soon use fast multithreaded tokenizers from the

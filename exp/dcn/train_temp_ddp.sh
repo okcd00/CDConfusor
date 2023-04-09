@@ -42,7 +42,7 @@ NUM_EPOCHS=10
 # 128 for sighan, 192 for dcn-train
 MAX_LENGTH=192  
 # 4 for 192-text-len on 12G GPU 
-# 12 for 192-text-len on 24G GPU /
+# 12 for 192-text-len on 24G GPU / 10 for 192-text-len on multi-GPU
 BATCH_SIZE=10  
 
 # custom settings for training
@@ -53,13 +53,14 @@ LOG_STEPS=$(echo "$DATASET_LINES/$GPU_COUNT/$BATCH_SIZE+1" | bc)
 SAVE_STEPS=$(echo "$LOG_STEPS/10" | bc)
 WARMUP_STEPS=$(echo "$SAVE_STEPS/10" | bc)
 echo "In this run, LOG_STEPS is $LOG_STEPS, SAVE_STEPS is $SAVE_STEPS"
+TOKENIZER_PARALLELISM=true
 
 # --------------
 # | RUN !!!    |
 # --------------
 
 # run the command
-WANDB_PROJECT=findoc_csc_finetuning CUDA_VISIBLE_DEVICES=$GPUS TOKENIZER_PARALLELISM=true python train_DCN.py \
+CUDA_VISIBLE_DEVICES=$GPUS torchrun --nproc_per_node=$GPU_COUNT train_DCN.py \
     --output_dir $OUTPUT_DIR \
     --per_device_train_batch_size $BATCH_SIZE \
     --learning_rate $LR  \

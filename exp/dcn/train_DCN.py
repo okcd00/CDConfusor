@@ -23,11 +23,13 @@ using a masked language modeling (MLM) loss.
 import logging
 import math
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
 import sys
+sys.path.append('/home/chendian/CDConfusor/exp/dcn/transformers')
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 
 from inference import Inference
@@ -153,10 +155,13 @@ def get_dataset(args: DataTrainingArguments, tokenizer: PreTrainedTokenizer, eva
     else:
         file_path = args.eval_data_file if evaluate else args.train_data_file
     if args.line_by_line:
-        return PinyinShuffleLineByLineTextDataset(tokenizer=tokenizer, file_path=file_path, block_size=args.block_size, shuffle=shuffle)
+        return PinyinShuffleLineByLineTextDataset(
+            tokenizer=tokenizer, file_path=file_path, 
+            block_size=args.block_size, shuffle=shuffle)
     else:
         return TextDataset(
-            tokenizer=tokenizer, file_path=file_path, block_size=args.block_size, overwrite_cache=args.overwrite_cache
+            tokenizer=tokenizer, file_path=file_path, 
+            block_size=args.block_size, overwrite_cache=args.overwrite_cache
         )
 
 
@@ -168,6 +173,7 @@ def main():
     parser = HfArgumentParser(
         (ModelArguments, DataTrainingArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    training_args.local_rank = int(os.environ.get("LOCAL_RANK", -1))
 
     if data_args.eval_data_file is None and training_args.do_eval:
         raise ValueError(
@@ -303,7 +309,7 @@ def main():
 
     # Evaluation
     results = {}
-    if training_args.do_eval:
+    if training_args.do_eval and training_args.local_rank <= 0:
         logger.info("*** Evaluate ***")
         # eval_output = trainer.evaluate()
         # perplexity = math.exp(eval_output["eval_loss"])
@@ -325,7 +331,7 @@ def main():
                     writer.write("%s = %s\n" % (key, str(result[key])))
         results.update(result)
 
-    if training_args.do_predict:
+    if training_args.do_predict and training_args.local_rank <= 0:
         # trainer.evaluate_sighan()
         instance = Inference(model_path=training_args.output_dir)
         if data_args.test_data_file.endswith('.dcn.txt'):
