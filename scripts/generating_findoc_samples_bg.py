@@ -11,10 +11,10 @@ from src.confusor_v2 import Confusor as ConfusorV2
 cfs = ConfusorV2()
 
 # custom size for confusion set
-ROUND = 20
-TAKE_CHAR_RATE = 0.17  # still confuse on char-level in a ratio
+ROUND = 10
+TAKE_CHAR_RATE = 0.11  # still confuse on char-level in a ratio
 # CONFUSION_SIZE = 10  # each word take at most K kinds of candidates
-WORD_SAMPLE_TIMES = 30  # each word take at most m times for generating samples
+WORD_SAMPLE_TIMES = 50  # each word take at most m times for generating samples
 
 used_conf = {}  # word: a list of tuple(candidate, int(weight))
 generated_n_lines = 0
@@ -22,7 +22,7 @@ generated_n_lines = 0
 
 sampled_words = {}  # word: int(times)
 sampled_candidates = {}  # word: set(candidates)
-path_to_sampled_history = '../exp/data/fin/findoc_augw.230406.sampled_candidates.txt'
+path_to_sampled_history = None  # '../exp/data/fin/findoc_augw.230406.sampled_candidates.txt'
 if path_to_sampled_history and os.path.exists(path_to_sampled_history):
     for idx, line in enumerate(open(path_to_sampled_history, 'r')):
         if idx == 0:
@@ -60,7 +60,8 @@ def update_used_conf(word):
     # print(candidates)    
     res = [  # different candidate words with the same length
         (c, score) for idx, (c, score) in enumerate(candidates) 
-        if len(c) == len(word) and c != word]
+        if len(c) == len(word) and c != word \
+        and all([_c in cfs.vocab_set for _c in c])]
     # update used_conf dict
     used_conf[word].extend(
         [(w, scoring_with_distance(score)) for w, score in res
@@ -105,8 +106,14 @@ def word_confusor_cfs(word, random_select=True, ignore_word=None):
 
 def piece_confusor_cfs(word, random_select=True, piece_size=2):
     assert len(word) >= piece_size
-    end_pos = random.randint(piece_size, len(_w))  # [l, r]
-    piece = _w[end_pos-piece_size:end_pos]
+    _w = f"{word}"
+    candidates = [(end_pos, _w[end_pos-piece_size:end_pos]) 
+                  for end_pos in range(piece_size, len(_w)+1)
+                  if sampled_words.get(_w[end_pos-piece_size:end_pos], 0) < WORD_SAMPLE_TIMES // piece_size]
+    if len(candidates) == 0:
+        return word
+    end_pos, piece = random.choice(candidates)
+    # piece = _w[end_pos-piece_size:end_pos]
     piece_candidate = word_confusor_cfs(
         piece, random_select=random_select)
     ret = f"{_w[:end_pos-piece_size]}{piece_candidate}{_w[end_pos:]}"
@@ -116,7 +123,7 @@ def piece_confusor_cfs(word, random_select=True, piece_size=2):
 import Pinyin2Hanzi
 from tqdm import tqdm
 
-DATE_STAMP = '230408'
+DATE_STAMP = '230411'
 PATH_TO_CORPUS = '/data/chendian/csc_findoc_corpus/unique_text_lines.220803.txt'
 lines = [line.strip() for line in open(PATH_TO_CORPUS, 'r')]
 
@@ -134,7 +141,7 @@ with open(f'../exp/data/fin/findoc_augw.{DATE_STAMP}.tsv', 'w') as f:
                     # if sampled more than 10 times, skip this word
                     if not Pinyin2Hanzi.is_chinese(w):
                         continue
-                    # each word is sampled at most 10 times
+                    # each word is sampled at most K/len(w) times
                     if sampled_words.get(w, 0) < WORD_SAMPLE_TIMES // len(w):
                     # if sampled_candidates.get(w, set()).__len__() < CONFUSION_SIZE:  
                         available.append(i)
@@ -142,6 +149,8 @@ with open(f'../exp/data/fin/findoc_augw.{DATE_STAMP}.tsv', 'w') as f:
                 continue
             cor = ''.join(words)
             if not 8 < len(cor) < 192:
+                continue
+            if len(available) == 0:
                 continue
             _i = random.choice(available)
             _w = words[_i]
@@ -177,7 +186,7 @@ with open(f'../exp/data/fin/findoc_augw.{DATE_STAMP}.sampled_candidates.txt', 'w
     f2.write(f"Generating Info:  Index-{idx},"
                 f"TargetWord-{len(sampled_candidates)},"
                 f"Sample-{generated_n_lines}.\n")
-    for k, v in sampled_candidates.items():
+    for k, v in sorted(sampled_candidates.items()):  # sort them at the last time.
         c = str(sampled_words.get(k, 0))
         f2.write(f"{k}\t{' '.join(v)}\t{c}\n")
     print(len(sampled_candidates), 'kinds of words are saved.')

@@ -74,6 +74,7 @@ class Confusor(object):
         
     def _load_confusor_data(self):
         self.vocab = load_vocab(VOCAB_PATH)
+        self.vocab_set = set([c for c in self.vocab if len(c) == 1])
         self.py_vocab = load_vocab(CHAR_PY_VOCAB_PATH)
 
         # load char-level REDscore matrix: red_score[str1][str2]
