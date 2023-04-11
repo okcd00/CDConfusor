@@ -171,10 +171,10 @@ class Trainer:
             prediction_loss_only:
                 (Optional) in evaluation and prediction, only return the loss
         """
-        self.model = model.to(args.device)
         self.args = args
         self.data_args = data_args
         self.data_collator = data_collator if data_collator is not None else default_data_collator
+        self.model = model.to(args.device)
         self.train_dataset = train_dataset
         self.eval_dataset = eval_dataset
         self.test_dataset = test_dataset
@@ -231,8 +231,7 @@ class Trainer:
             batch_size=self.args.train_batch_size,
             sampler=train_sampler if not isinstance(self.train_dataset, IterableDataset) else None,
             collate_fn=self.data_collator,
-            num_workers=4,
-            prefetch_factor=4,
+            num_workers=4, prefetch_factor=3,
             drop_last=self.args.dataloader_drop_last,
         )
 
@@ -502,7 +501,6 @@ class Trainer:
                                       disable=not self.is_local_master())
 
             for step, inputs in enumerate(epoch_iterator):
-
                 # Skip past any already trained steps if resuming training
                 if steps_trained_in_current_epoch > 0:
                     steps_trained_in_current_epoch -= 1
@@ -546,10 +544,11 @@ class Trainer:
 
                         if self.args.evaluate_during_training:
                             if self.is_world_master():
-                                self.evaluate_sighan()
+                                sighan_metrics = self.evaluate_sighan()
                         elif self.args.evaluate_during_mlm:
                             if self.is_world_master():
-                                self.evaluate()
+                                metrics = self.evaluate()
+                                print(metrics)
 
                     if self.args.save_steps > 0 and self.global_step % self.args.save_steps == 0:
                         # In all cases (even distributed/parallel), self.model is always a reference
@@ -559,7 +558,9 @@ class Trainer:
                         else:
                             assert model is self.model
                         # Save model checkpoint
-                        output_dir = os.path.join(self.args.output_dir, f"{PREFIX_CHECKPOINT_DIR}-{self.global_step}")
+                        output_dir = os.path.join(
+                            self.args.output_dir, 
+                            f"{PREFIX_CHECKPOINT_DIR}-{self.global_step}")
 
                         self.save_model(output_dir)
 
@@ -621,7 +622,8 @@ class Trainer:
             logger.info(output)
 
     def _training_step(
-        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], optimizer: torch.optim.Optimizer, finetune=False
+        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]], 
+        optimizer: torch.optim.Optimizer, finetune=False
     ) -> float:
         model.train()
         for k, v in inputs.items():

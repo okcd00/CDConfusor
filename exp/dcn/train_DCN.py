@@ -161,7 +161,8 @@ def get_dataset(args: DataTrainingArguments, tokenizer: PreTrainedTokenizer, eva
     else:
         return TextDataset(
             tokenizer=tokenizer, file_path=file_path, 
-            block_size=args.block_size, overwrite_cache=args.overwrite_cache
+            block_size=args.block_size, 
+            overwrite_cache=args.overwrite_cache
         )
 
 

@@ -8,6 +8,7 @@
 #   desc     : APIs for inference call with DCN.
 # ==========================================================================
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import sys
 sys.path.append('./')
 
@@ -234,9 +235,8 @@ class Inference(object):
 
 def main():
 
-    # 'cd_models/findoc_finetuned_w271k+cctc+fd2.mp/'
-    # 'dcn_models/findoc_finetuned_w271k/'
-    model_path='cd_models/findoc_finetuned_w271k_rd2/'
+    # model_path='cd_models/findoc_finetuned_w271k+cctc+rfd/'
+    model_path='cd_models/findoc_finetuned_230410_multigpu/checkpoint-153616/'
     instance = Inference(model_path=model_path)
     # input_lines, truth_lines = 
     # instance.evaluate_bad_cases(input_lines, truth_lines)
@@ -244,9 +244,9 @@ def main():
 
     path_to_test_files = {
         'rw': '../data/cn/rw/rw_test.tsv',
-        'cctc': '../data/cn/cctc/cctc_test.tsv',
-        'fd1': '../data/cn/findoc/findoc_test.v1.tsv',
-        'fd2': '../data/cn/findoc/findoc_test.v2.tsv',
+        'cctc-test': '../data/cn/cctc/cctc_test.tsv',
+        'rfd-test': '../data/cn/findoc/findoc_test.v1.tsv',
+        'rfd-train': '../data/cn/findoc/findoc_test.v2.tsv',
         'sighan': '../data/cn/sighan15/sighan15_test.tsv',
         'w271k': '../data/cn/Wang271k/dcn_train.tsv',
     }
@@ -255,7 +255,7 @@ def main():
         p, r, f, acc = instance.evaluate_on_tsv(path_to_test_files[key])
         results[key] = (p, r, f, acc)
 
-    for key in ['sighan', 'cctc', 'rw', 'fd1', 'fd2']:
+    for key in ['sighan', 'cctc-test', 'rw', 'rfd-test', 'rfd-train']:
         check_on(key)
     print(results)
 
@@ -266,5 +266,5 @@ def main():
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     main()

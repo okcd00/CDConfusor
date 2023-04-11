@@ -14,6 +14,7 @@ set -e
 # TRAIN_FILE=../data/cn/findoc/findoc_test.v1.dcn.txt  # RFD_test: 368 
 # TRAIN_FILE=../data/cn/findoc/findoc_test.v2.dcn.txt  # RFD_train: 6569
 TRAIN_FILE=../data/fin/findoc_train.230406.dcn.txt  # findoc-corpus: 7680964
+DATASET_LINES=7680964
 
 # TEST_FILE=../data/cn/findoc/findoc_test.v1.dcn.txt  # RFD_test: 368
 # TEST_FILE=../data/cn/cctc/cctc_test.dcn.txt  # CCTC_test: 721
@@ -22,8 +23,9 @@ SIGHAN_TEST_FILE=../data/cn/sighan15/sighan15_test.dcn.txt
 
 # --model_name_or_path $WARMUP_DIR (modified roberta vocab)
 BERT_MODEL=../pretrained_models/chinese-roberta-wwm-ext/
-WARMUP_DIR=cd_models/findoc_finetuned_w271k+cctc+rfd/  # nomp
-OUTPUT_DIR=cd_models/findoc_finetuned_230406_multigpu/
+# WARMUP_DIR=cd_models/findoc_finetuned_w271k+cctc+rfd/  # nomp
+WARMUP_DIR=cd_models/findoc_finetuned_230410_multigpu/checkpoint-153616/
+OUTPUT_DIR=cd_models/findoc_finetuned_230410_multigpu/
 
 mkdir -p $OUTPUT_DIR
 cp ./train_temp.sh $OUTPUT_DIR/train_temp.sh
@@ -36,18 +38,17 @@ cp ./train_temp.sh $OUTPUT_DIR/train_temp.sh
 SEED=1038
 LR=5e-5
 MIN_LR=2e-6
-SAVE_TOTAL_LIMIT=5
+SAVE_TOTAL_LIMIT=10
 NUM_EPOCHS=10
 
 # 128 for sighan, 192 for dcn-train
 MAX_LENGTH=192  
 # 4 for 192-text-len on 12G GPU 
 # 12 for 192-text-len on 24G GPU / 10 for 192-text-len on multi-GPU
-BATCH_SIZE=10  
+BATCH_SIZE=10
 
 # custom settings for training
-GPUS=1,4,5,6,7,8
-DATASET_LINES=7680964
+GPUS=1,2,3,4,5,6,7,8
 GPU_COUNT=$(echo $GPUS | tr -cd "[0-9]" | wc -c)
 LOG_STEPS=$(echo "$DATASET_LINES/$GPU_COUNT/$BATCH_SIZE+1" | bc)
 SAVE_STEPS=$(echo "$LOG_STEPS/10" | bc)

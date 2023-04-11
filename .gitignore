@@ -1,5 +1,6 @@
 *.bak
 .vscode/
+findoc_augw.*
 data/*.bak
 data/*.pkl
 data/*ry.json
