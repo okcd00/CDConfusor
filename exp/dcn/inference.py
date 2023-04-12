@@ -233,10 +233,10 @@ class Inference(object):
         return self.predict(input_lines=texts, batch_size=4)
 
 
-def main():
+def main(model_path=None):
 
     # model_path='cd_models/findoc_finetuned_w271k+cctc+rfd/'
-    model_path='cd_models/findoc_finetuned_230410_multigpu/checkpoint-153616/'
+    model_path = model_path or 'cd_models/findoc_finetuned_230410_multigpu/checkpoint-268828/'
     instance = Inference(model_path=model_path)
     # input_lines, truth_lines = 
     # instance.evaluate_bad_cases(input_lines, truth_lines)
@@ -252,7 +252,8 @@ def main():
     }
 
     def check_on(key):
-        p, r, f, acc = instance.evaluate_on_tsv(path_to_test_files[key])
+        p, r, f, acc = instance.evaluate_on_tsv(
+            path_to_test_files[key], batch_size=4)
         results[key] = (p, r, f, acc)
 
     for key in ['sighan', 'cctc-test', 'rw', 'rfd-test', 'rfd-train']:
@@ -260,11 +261,22 @@ def main():
     print(results)
 
     print(model_path.split('/')[1])
+    res_line = ""
     for k, v in results.items():
         v = map(str, v)
+        res_line += '\t'.join(v)
+        res_line += '\t'
         print('\t'.join(v), end='\t')
+    return res_line
 
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    main()
+    res = {}
+    from glob import glob
+    for fp in glob('./cd_models/findoc_finetuned_230410_multigpu/checkpoint-*/'):
+        res[fp.split('/')[-2]] = main(fp)
+    
+    from pprint import pprint
+    for k, v in res.items():
+        print(f"{k.split('-')[-1]}\t{v}")
