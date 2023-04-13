@@ -35,8 +35,8 @@ def pinyin_index(pinyin_str):
         return 0  # [UNK]
 
 
-src_path = '../../data/fin/findoc_augw.230408.tsv'
-tgt_path = '../../data/fin/findoc_train.230408.dcn.txt'
+src_path = '../../data/fin/findoc_train.230414.tsv'
+tgt_path = '../../data/fin/findoc_train.230414.dcn.txt'
 
 
 same = 0
@@ -86,7 +86,7 @@ with open(tgt_path, 'w') as f:
                 last_index = max(0, faulty_indexes[0] - 20)
             tokens = tokens[last_index:]
             cor_tokens = cor_tokens[last_index:]
-            len_index = len_index[last_index:]
+            len_indexes = len_indexes[last_index:]
             py_indexes = py_indexes[last_index:]
         if len(tokens) == len(cor_tokens) == len(len_indexes) == len(py_indexes):
             res = f"{' '.join(tokens)}\t{' '.join(cor_tokens)}\t{' '.join(len_indexes)}\t{' '.join(py_indexes)}\n"
