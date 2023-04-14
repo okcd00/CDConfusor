@@ -13,19 +13,20 @@ set -e
 # TRAIN_FILE=../data/cn/rw/rw_test.dcn.txt  # RW = CCTC_test + RFD_test: 1089
 # TRAIN_FILE=../data/cn/findoc/findoc_test.v1.dcn.txt  # RFD_test: 368 
 # TRAIN_FILE=../data/cn/findoc/findoc_test.v2.dcn.txt  # RFD_train: 6569
-TRAIN_FILE=../data/fin/findoc_train.230406.dcn.txt  # findoc-corpus: 7680964
-DATASET_LINES=7680964
+# TRAIN_FILE=../data/fin/findoc_train.230406.dcn.txt  # findoc-corpus: 7680964
+TRAIN_FILE=../data/fin/findoc_train.230414.dcn.txt  # findoc-corpus: 14122819
+DATASET_LINES=14122819
 
-# TEST_FILE=../data/cn/findoc/findoc_test.v1.dcn.txt  # RFD_test: 368
+TEST_FILE=../data/cn/findoc/findoc_test.v1.dcn.txt  # RFD_test: 368
 # TEST_FILE=../data/cn/cctc/cctc_test.dcn.txt  # CCTC_test: 721
-TEST_FILE=../data/cn/rw/rw_test.dcn.txt
+# TEST_FILE=../data/cn/rw/rw_test.dcn.txt
 SIGHAN_TEST_FILE=../data/cn/sighan15/sighan15_test.dcn.txt
 
 # --model_name_or_path $WARMUP_DIR (modified roberta vocab)
 BERT_MODEL=../pretrained_models/chinese-roberta-wwm-ext/
 # WARMUP_DIR=cd_models/findoc_finetuned_w271k+cctc+rfd/  # nomp
-WARMUP_DIR=cd_models/findoc_finetuned_230410_multigpu/checkpoint-153616/
-OUTPUT_DIR=cd_models/findoc_finetuned_230410_multigpu/
+WARMUP_DIR=cd_models/findoc_finetuned_230413_multigpu/checkpoint-374439/
+OUTPUT_DIR=cd_models/findoc_finetuned_230414/
 
 mkdir -p $OUTPUT_DIR
 cp ./train_temp.sh $OUTPUT_DIR/train_temp.sh
@@ -36,8 +37,8 @@ cp ./train_temp.sh $OUTPUT_DIR/train_temp.sh
 
 # model hyper-parameters
 SEED=1038
-LR=5e-5
-MIN_LR=2e-6
+LR=1e-5
+MIN_LR=3e-6  # higher fixed lr
 SAVE_TOTAL_LIMIT=10
 NUM_EPOCHS=10
 
@@ -50,8 +51,8 @@ BATCH_SIZE=10
 # custom settings for training
 GPUS=1,2,3,4,5,6,7,8
 GPU_COUNT=$(echo $GPUS | tr -cd "[0-9]" | wc -c)
-LOG_STEPS=$(echo "$DATASET_LINES/$GPU_COUNT/$BATCH_SIZE+1" | bc)
-SAVE_STEPS=$(echo "$LOG_STEPS/10" | bc)
+LOG_STEPS=$(echo "$DATASET_LINES/$GPU_COUNT/$BATCH_SIZE/10+1" | bc)
+SAVE_STEPS=$LOG_STEPS  # $(echo "$LOG_STEPS" | bc)
 WARMUP_STEPS=$(echo "$SAVE_STEPS/10" | bc)
 echo "In this run, LOG_STEPS is $LOG_STEPS, SAVE_STEPS is $SAVE_STEPS"
 TOKENIZER_PARALLELISM=true

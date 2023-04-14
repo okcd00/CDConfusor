@@ -260,7 +260,7 @@ def main(model_path=None):
         check_on(key)
     print(results)
 
-    print(model_path.split('/')[1])
+    print(model_path.split('/')[-2])
     res_line = ""
     for k, v in results.items():
         v = map(str, v)
@@ -271,10 +271,12 @@ def main(model_path=None):
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "7"
     res = {}
     from glob import glob
-    for fp in glob('./cd_models/findoc_finetuned_230410_multigpu/checkpoint-*/'):
+    fp_list = sorted(glob('./cd_models/findoc_finetuned_230413_multigpu/checkpoint-*/'))
+    # fp_list = ['./cd_models/findoc_finetuned_230413_multigpu/checkpoint-*/']
+    for fp in fp_list:
         res[fp.split('/')[-2]] = main(fp)
     
     from pprint import pprint

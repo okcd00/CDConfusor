@@ -231,7 +231,8 @@ class Trainer:
             batch_size=self.args.train_batch_size,
             sampler=train_sampler if not isinstance(self.train_dataset, IterableDataset) else None,
             collate_fn=self.data_collator,
-            num_workers=4, prefetch_factor=3,
+            num_workers=2,
+            # prefetch_factor=3,
             drop_last=self.args.dataloader_drop_last,
         )
 
@@ -540,15 +541,16 @@ class Trainer:
                             else scheduler.get_lr()[0]
                         )
                         logging_loss = tr_loss
-                        self._log(logs)
 
-                        if self.args.evaluate_during_training:
-                            if self.is_world_master():
-                                sighan_metrics = self.evaluate_sighan()
-                        elif self.args.evaluate_during_mlm:
-                            if self.is_world_master():
+                        if self.is_world_master():
+                            if self.args.evaluate_during_training:
+                                self.evaluate_sighan()  # outputs in logs, no return items
+                                    
+                            if self.args.evaluate_during_mlm:
                                 metrics = self.evaluate()
-                                print(metrics)
+                                print(f"Local Rank: {self.args.local_rank} | {metrics}")
+                        
+                        self._log(logs)
 
                     if self.args.save_steps > 0 and self.global_step % self.args.save_steps == 0:
                         # In all cases (even distributed/parallel), self.model is always a reference
@@ -558,6 +560,7 @@ class Trainer:
                         else:
                             assert model is self.model
                         # Save model checkpoint
+
                         output_dir = os.path.join(
                             self.args.output_dir, 
                             f"{PREFIX_CHECKPOINT_DIR}-{self.global_step}")
@@ -781,7 +784,6 @@ class Trainer:
         print("********* Evaluation Test sighan15 Sentence-level ************")
         for line in output:
             print(line.strip(), flush=True)
-
 
     def evaluate(
         self, eval_dataset: Optional[Dataset] = None, prediction_loss_only: Optional[bool] = None,
