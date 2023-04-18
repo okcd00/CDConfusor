@@ -256,7 +256,7 @@ def main(model_path=None):
             path_to_test_files[key], batch_size=4)
         results[key] = (p, r, f, acc)
 
-    for key in ['sighan', 'cctc-test', 'rw', 'rfd-test', 'rfd-train']:
+    for key in ['sighan', 'cctc-test', 'rfd-test', 'rfd-train']:
         check_on(key)
     print(results)
 
@@ -271,14 +271,18 @@ def main(model_path=None):
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     res = {}
     from glob import glob
-    fp_list = sorted(glob('./cd_models/findoc_finetuned_230413_multigpu/checkpoint-*/'))
+    fp_list = sorted(glob('./cd_models/confusor_ours/checkpoint-*/'))
     # fp_list = ['./cd_models/findoc_finetuned_230413_multigpu/checkpoint-*/']
     for fp in fp_list:
-        res[fp.split('/')[-2]] = main(fp)
+        k = fp.split('/')[-2]
+        k = int(k.split('-')[-1])
+        if k < 33810:
+            continue
+        res[k] = main(fp)
     
     from pprint import pprint
     for k, v in res.items():
-        print(f"{k.split('-')[-1]}\t{v}")
+        print(f"\n{k}\t{v}")

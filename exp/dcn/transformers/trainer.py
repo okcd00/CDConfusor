@@ -231,8 +231,7 @@ class Trainer:
             batch_size=self.args.train_batch_size,
             sampler=train_sampler if not isinstance(self.train_dataset, IterableDataset) else None,
             collate_fn=self.data_collator,
-            num_workers=2,
-            # prefetch_factor=3,
+            num_workers=1, prefetch_factor=2,
             drop_last=self.args.dataloader_drop_last,
         )
 
@@ -816,6 +815,7 @@ class Trainer:
         if self.test_dataset:
             test_dataloader = self.get_test_dataloader(self.test_dataset) # test
             output_test = self._prediction_loop(test_dataloader, description="Evaluation_test") # test
+            self._log({f"{k}-test": v for k, v in output_test.metrics.items()})
 
         return output.metrics
 
