@@ -88,7 +88,7 @@ def is_pure_chinese_phrase(phrase_str):
 
 
 def predict_on_texts(input_lines, model, tokenizer, 
-                     batch_size=4, max_len=180, return_fo=False):
+                     batch_size=4, max_len=192, return_fo=False):
     # pre-process texts:
     dcn_lines = clean_texts(input_lines)
     dcn_items = [[w[2:] if w.startswith('##') else w
