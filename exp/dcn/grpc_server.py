@@ -36,9 +36,45 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
-from exp.dcn.predict_DCN import result_predict
-from exp.dcn.inference import load_model
-from utils import is_chinese_char, convert_to_unicode, is_pure_chinese_phrase
+from predict_DCN import result_predict
+from inference import load_model
+
+
+def is_chinese_char(cp):
+    """Checks whether CP is the codepoint of a CJK character."""
+    # This defines a "chinese character" as anything in the CJK Unicode block:
+    #   https://en.wikipedia.org/wiki/CJK_Unified_Ideographs_(Unicode_block)
+    #
+    # Note that the CJK Unicode block is NOT all Japanese and Korean characters,
+    # despite its name. The modern Korean Hangul alphabet is a different block,
+    # as is Japanese Hiragana and Katakana. Those alphabets are used to write
+    # space-separated words, so they are not treated specially and handled
+    # like the all of the other languages.
+    if ((cp >= 0x4E00 and cp <= 0x9FFF) or  #
+        (cp >= 0x3400 and cp <= 0x4DBF) or  #
+        (cp >= 0x20000 and cp <= 0x2A6DF) or  #
+        (cp >= 0x2A700 and cp <= 0x2B73F) or  #
+        (cp >= 0x2B740 and cp <= 0x2B81F) or  #
+        (cp >= 0x2B820 and cp <= 0x2CEAF) or
+        (cp >= 0xF900 and cp <= 0xFAFF) or  #
+        (cp >= 0x2F800 and cp <= 0x2FA1F)):  #
+        return True
+    return False
+
+
+def convert_to_unicode(text):
+    """Converts `text` to Unicode (if it's not already), assuming utf-8 input."""
+    if isinstance(text, str):
+        return text
+    elif isinstance(text, bytes):
+        return text.decode("utf-8", "ignore")
+    else:
+        raise ValueError("Unsupported string type: %s" % (type(text)))
+
+
+def is_pure_chinese_phrase(phrase_str):
+    # all tokens are Chinese
+    return False not in list(map(is_chinese_char, map(ord, phrase_str)))
 
 
 def B2Q(uchar):
@@ -119,7 +155,7 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
         self.max_len = 180
         self.records = OrderedDict()
 
-        model_path = '/home/chendian/CDConfusor/exp/dcn/cd_models/findoc_finetuned_230410_multigpu/checkpoint-374439/'
+        model_path = '/home/chendian/CDConfusor/exp/dcn/cd_models/findoc_finetuned_230410_multigpu/'
 
         model, tokenizer = load_model(model_path=model_path)
         self.model = model
