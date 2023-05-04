@@ -264,9 +264,10 @@ def result_predict(sentence_list, tokenizer, model, device, batch_size=50, max_s
                                  batch_size=batch_size)
 
     result = []
-    result_prob = []
+    result_prob = []  # TODO: add confidence values.
     i = 0
-    for input_ids, input_mask, segment_ids, pinyin_ids in tqdm(eval_dataloader):
+    stream = tqdm(eval_dataloader) if len(eval_data) // batch_size >= 3 else eval_dataloader
+    for input_ids, input_mask, segment_ids, pinyin_ids in stream:
         i += 1
         input_ids = input_ids.to(device)
         input_mask = input_mask.to(device)
@@ -280,7 +281,8 @@ def result_predict(sentence_list, tokenizer, model, device, batch_size=50, max_s
         result.extend(preds.tolist())
 
     # remove [CLS] and [SEP]/[PAD]
-    labels = [tokenizer.convert_ids_to_tokens(r)[1:len(sentence_list[idx])]  # + 1] 
+    sentence_length = all_input_mask.sum(-1).detach().cpu().numpy()
+    labels = [tokenizer.convert_ids_to_tokens(r)[1:int(sentence_length[idx] - 1)]
               for idx, r in enumerate(result)]
     return labels
 

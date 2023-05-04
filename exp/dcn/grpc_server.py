@@ -12,7 +12,7 @@ import grpc
 from urllib import response
 from concurrent import futures
 from multiprocessing import Pool
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from grpc._cython.cygrpc import CompressionAlgorithm, CompressionLevel
 
 
@@ -29,7 +29,8 @@ python -m grpc_tools.protoc -I ./ --python_out=. --grpc_python_out=. correction.
 
 
 import correction_pb2, correction_pb2_grpc
-
+import re
+re_han = re.compile("([\u4E00-\u9Fa5a-zA-Z0-9+#&]+)", re.U)
 
 import json
 import torch
@@ -94,7 +95,32 @@ def clean_texts(input_lines):
     return [''.join([B2Q(c) for c in t]) for t in input_lines]
 
 
-def predict_on_texts(input_lines, model, tokenizer, det_mask=None,
+def split_2_short_text(text, include_symbol=False):
+    """
+    长句切分为短句
+    :param text: str
+    :param include_symbol: bool
+    :return: (sentence, idx)
+
+    Examples:
+    [..., ('然而', 200), ('，', 202), ...]
+    """
+    result = []
+    blocks = re_han.split(text)
+    start_idx = 0
+    for blk in blocks:
+        if not blk:
+            continue
+        if include_symbol:
+            result.append((blk, start_idx))
+        else:
+            if re_han.match(blk):
+                result.append((blk, start_idx))
+        start_idx += len(blk)
+    return result
+
+
+def predict_on_texts(input_lines, model, tokenizer,
                      batch_size=4, max_len=192, return_fo=False):
     # pre-process texts:
     dcn_lines = clean_texts(input_lines)
@@ -116,13 +142,15 @@ def predict_on_texts(input_lines, model, tokenizer, det_mask=None,
     result_items = [[w[2:] if w.startswith('##') else w
                      for w in res] 
                     for res in result_items]
-    
     # compare
     outputs = []
     for idx, (inp, out) in enumerate(zip(dcn_items, result_items)):
+        # print(len(inp), inp)
+        # print(len(out), out)
         offset = 0
         blanks = blank_indexes[idx]
         corrected_line = f"{input_lines[idx]}"
+        # print(corrected_line)
         if inp != out:    
             for i, (c1, c2) in enumerate(zip(inp, out)):
                 if offset in blanks:
@@ -132,15 +160,11 @@ def predict_on_texts(input_lines, model, tokenizer, det_mask=None,
                     offset += 1
                 else:
                     offset += len(c1)
-
                 if c1 == c2:
                     continue
-                if det_mask is not None:
-                    # [CLS]/[SEP] are removed
-                    if det_mask[i+1] == 0:  
-                        continue  # ignored indexes
                 if is_pure_chinese_phrase(c1) and is_pure_chinese_phrase(c2):
                     # print(i, (c1, c2))
+                    # print(len(corrected_line), offset, offset-len(c1))
                     corrected_line = f"{corrected_line[:offset-len(c1)]}{c2}{corrected_line[offset:]}"
         outputs.append(corrected_line)
     if return_fo: # return full outputs
@@ -162,27 +186,29 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
         self.tokenizer = tokenizer
     
     def generate_ignore_mask_for_predict(self, texts, ignore_mask):
-        # the mask consists of 0(normal) and 1(ignore)
+        # the input ignore_mask is char-level from client.
         if isinstance(texts, list):
             mask_case = [self.generate_ignore_mask_for_predict(text, im) 
                          for text, im in zip(texts, ignore_mask)]
+            
             max_len = max(map(len, mask_case))
-            mask_case = [1 - np.pad(msk, (0, (max_len-len(msk)))) 
+            mask_case = [np.pad(msk, (0, (max_len-len(msk))), constant_values=1) # 1 for ignore
                          for msk in mask_case]
-            return torch.from_numpy(np.stack(mask_case))
+            # the ignore_mask consists of 0(normal) and 1(ignore)
+            # return torch.from_numpy(np.stack(mask_case))
+            return np.stack(mask_case)
 
         def judge_valid_token_for_csc(token):
             if token.startswith('##'):
                 token = token[2:]
             if len(token) > 1:
-                return 0  # invalid
+                return 1  # invalid
             if is_chinese_char(ord(token)):
-                return 1  # valid
-            return 0  # invalid
+                return 0  # valid
+            return 1  # invalid
         
         def mark_entities(ignore_mask, tok_case, _text):
             _valid = [judge_valid_token_for_csc(tok) for tok in tok_case]
-            ignore_case = np.array([0] + _valid + [0])
 
             char_to_word_idx = []
             for tok_idx, tok in enumerate(tok_case):
@@ -196,42 +222,149 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
             for i, d in enumerate(ignore_mask):
                 if d == 0:
                     continue
-                ignore_case[char_to_word_idx[i]] = 1
+                _valid[char_to_word_idx[i]] = 1
+            # the single ignore_mask consists of 0(ignore) and 1(normal)
+            # the flag will be reversed in batch.
+            ignore_case = np.array([1] + _valid + [1])
             return ignore_case            
         
+        # w/o [CLS] ... [SEP] 
         tok_case = self.tokenizer.tokenize(convert_to_unicode(texts))
-        # [CLS] ... [SEP] 
+        # w/ [CLS] ... [SEP] 
         ignore_case = mark_entities(ignore_mask, tok_case, texts)
+        try:
+            assert len(tok_case) + 2 == len(ignore_case)
+        except Exception as e:
+            for t, m in zip(tok_case, ignore_case[1:-1]):
+                print(t, m)
+            print(len(tok_case))
+            print(tok_case)
+            print(len(ignore_case))
+            print(ignore_case)     
+            raise e       
+        # tokenizer-level
         return ignore_case
 
-    def construct_response_dict_list(self, outputs):
-        if not self.return_detail:
-            return [{'text': t} for t in outputs]
-
-        response = [{'text': t} for t in outputs]
-        # TODO: add confidence value outputs later.
-        return response
+    def get_metric(self, input_lines, truth_lines, outputs):
+        results = list(zip(input_lines, truth_lines, outputs))
+        from exp.dcn.evaluate import compute_corrector_prf_faspell
+        metrics = compute_corrector_prf_faspell(results, strict=True)
+        if self.detailed_evaluate:
+            return metrics
+        p, r, f, acc = metrics['cor_sent_p'], metrics['cor_sent_r'], \
+            metrics['cor_sent_f1'], metrics['cor_sent_acc']
+        p, r, f, acc = list(map(lambda x: round(x*100, 2), [p, r, f, acc]))
+        print(f"{p}/{r}/{f} | {acc}")
+        return p, r, f, acc
 
     def evaluate(self, input_lines, truth_lines=None, 
-                 det_mask=None, batch_size=4):
+                 det_mask=None, batch_size=8, detail=False):
+        # predict on splitted segments.
+        _lines = []
+        segment_id = 0
+        segment_mapping = []  # line_id: [segment_id1, segment_id2]
+        for line_idx, line in enumerate(input_lines):
+            segment_mapping.append([])
+            if len(line) < 179:
+                segment_mapping[line_idx].append(segment_id)
+                _lines.append(line)
+                segment_id += 1
+                continue
+            head, buffer = 1, ""  
+            split_cases = split_2_short_text(line, include_symbol=True)
+            split_cases = [(split_cases[i][0] + (split_cases[i+1][0] if i+1 < len(split_cases) else ""), 
+                            split_cases[i][1]) 
+                           for i in range(0, len(split_cases), 2)]
+            for subtext, start_idx in split_cases:
+                subtext_size = len(subtext)
+                if len(buffer) + subtext_size >= self.max_len:
+                    _lines.append(buffer)  # char-level tokens
+                    segment_mapping[line_idx].append(segment_id)
+                    segment_id += 1
+                    buffer = ""
+                    head = start_idx
+                buffer += subtext
+            else:
+                if buffer:
+                    _lines.append(buffer)
+                    segment_mapping[line_idx].append(segment_id)
+                    buffer = ""
+        try:
+            assert sum(list(map(len, _lines))) == sum(list(map(len, input_lines)))
+        except Exception as e:
+            print(segment_mapping)
+            print(list(map(len, _lines)))
+            print(list(map(len, input_lines)))
+            raise e
+
+        # outputs may be a 1-item case or 3-item case
+        # a list of texts [, dcn_items] [, result_items]
         outputs = predict_on_texts(
-            input_lines=input_lines, 
-            det_mask=det_mask,
-            model=self.model, tokenizer=self.tokenizer,
-            batch_size=batch_size, max_len=self.max_len)
+            input_lines=_lines, 
+            model=self.model, 
+            tokenizer=self.tokenizer,
+            batch_size=batch_size, 
+            max_len=self.max_len,
+            return_fo=detail)
+        
+        prediction_texts = outputs[0] if detail else outputs
         
         if truth_lines is not None:
-            results = list(zip(input_lines, truth_lines, outputs))
-            from exp.dcn.evaluate import compute_corrector_prf_faspell
-            metrics = compute_corrector_prf_faspell(results, strict=True)
-            if self.detailed_evaluate:
-                return metrics
-            p, r, f, acc = metrics['cor_sent_p'], metrics['cor_sent_r'], \
-                metrics['cor_sent_f1'], metrics['cor_sent_acc']
-            p, r, f, acc = list(map(lambda x: round(x*100, 2), [p, r, f, acc]))
-            print(f"{p}/{r}/{f} | {acc}")
+            p, r, f, acc = self.get_metric(
+                input_lines, truth_lines, outputs)
         
-        return outputs  # a list of texts
+        try:
+            assert len(det_mask) == len(segment_mapping)
+        except Exception as e:
+            for _d in det_mask:
+                print('tokenizer-level mask:', _d.shape)
+            for _s in segment_mapping:
+                segment_size = [len(prediction_texts[segment_id]) for segment_id in _s]
+                print('char-level length:', '+'.join(list(map(str, segment_size))))
+
+        texts = []
+        dcn_items = []
+        result_items = []
+        for line_id, segment_ids in enumerate(segment_mapping):
+            if detail:
+                bucket = ["", [], []]
+            for segment_id in segment_ids:
+                bucket[0] += prediction_texts[segment_id]
+                if detail:
+                    bucket[1].extend(outputs[1][segment_id])
+                    bucket[2].extend(outputs[2][segment_id])
+
+            # drop ignored positions in result_items.
+            mask = det_mask[line_id][1:]  # tokenizer-based token level, removed [CLS]
+            # print(bucket[0])
+            assert bucket[1].__len__() == bucket[2].__len__() 
+            for idx, (o, p) in enumerate(zip(bucket[1], bucket[2])):
+                if o == p or B2Q(o) == p.upper():
+                    continue
+                try:
+                    assert mask.shape[0] >= len(bucket[1])
+                    if mask[idx] == 1:
+                        bucket[2][idx] = bucket[1][idx]
+                except Exception as e:
+                    print(mask.shape)
+                    print(idx)
+                    print(bucket[1].__len__(), bucket[2].__len__())
+                    for i, (o, p) in enumerate(list(zip(bucket[1], bucket[2]))):                       
+                        if -5 < i-idx < 5:
+                            print(i, o, p)
+                    print(bucket[1][idx], bucket[2][idx])
+                    raise e
+
+            # append into return items.
+            texts.append(bucket[0])
+            dcn_items.append(bucket[1])
+            result_items.append(bucket[2])               
+
+        if detail:
+            # a list of texts [, dcn_items] [, result_items]
+            return texts, dcn_items, result_items
+        # a list of texts
+        return texts
 
     def ask(self, request, context):
         # request is a list of texts (json str)
@@ -239,23 +372,31 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
         if self.debug:
             print(request)
         sentence_list = json.loads(request.key)
+
         if len(sentence_list) == 0:
             outputs = []
         else:
             texts = [s['sentence'] for s in sentence_list]
             ignore_mask = [s['ignore_mask'] for s in sentence_list]
+            # with [CLS] and [SEP]
+            # the mask consists of 0(normal) and 1(ignore)
             det_mask = self.generate_ignore_mask_for_predict(
                 texts, ignore_mask)             
             if self.debug:
                 print(request)
                 print(sentence_list)
-            outputs = self.evaluate(
-                input_lines=texts, 
-                det_mask=det_mask, 
-                detail=self.return_detail)
+            try: 
+                outputs, dcn_items, result_items = self.evaluate(
+                    input_lines=texts, det_mask=det_mask, detail=True)
+                outputs = [
+                    {'text': output, 'dcn_items': dcn_item, 'result_items': result_item}
+                    for output, dcn_item, result_item in zip(outputs, dcn_items, result_items)]
+            except Exception as e:
+                print(f"Error in evaluate(): ", str(e))
+                outputs = []
         
-        response = self.construct_response_dict_list(outputs)
-        response_str = json.dumps(response)
+        # outputs = self.construct_response_dict_list(outputs)
+        response_str = json.dumps(outputs)
         return correction_pb2.Response(value=response_str)
 
     def remember(self, request, context):
@@ -270,7 +411,7 @@ def serve(n_worker=1, port=20417):
     print("starting server...", time.ctime())
 
     max_receive_message_length = 100 * 1024
-    service = CSCServicer(debug=False, return_detail=True)
+    service = CSCServicer(debug=False, return_detail=False)
     service.process_pool = Pool(processes=n_worker)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=n_worker), options=[
         ('grpc.max_receive_message_length', max_receive_message_length),
@@ -295,3 +436,7 @@ def serve(n_worker=1, port=20417):
 
 if __name__ == "__main__":
     serve()
+    # line = "作为一个写作和编程助手，我可以为您解答这个问题。适当的时间管理和休息是非常重要的，以避免过度劳累。"
+    # print(split_2_short_text(line, include_symbol=True))
+    # service = CSCServicer(debug=False, return_detail=False)
+    # service.ask()
