@@ -79,6 +79,9 @@ def is_pure_chinese_phrase(phrase_str):
 
 
 def B2Q(uchar):
+    if len(uchar) > 1:
+        print(f"B2Q can not solve the {len(uchar)}-gram: {uchar}")
+        return uchar
     """单个字符 半角转全角"""
     inside_code = ord(uchar)
     if inside_code < 0x0020 or inside_code > 0x7e: # 不是半角字符就返回原来的字符
@@ -90,9 +93,11 @@ def B2Q(uchar):
     return chr(inside_code).upper()
 
 
-def clean_texts(input_lines):
+def clean_texts(text):
+    if isinstance(text, list):
+        return [clean_texts(t) for t in text]
     # B2Q + upper
-    return [''.join([B2Q(c) for c in t]) for t in input_lines]
+    return ''.join([B2Q(c) for c in text])
 
 
 def split_2_short_text(text, include_symbol=False):
@@ -185,14 +190,16 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
         self.model = model
         self.tokenizer = tokenizer
     
-    def generate_ignore_mask_for_predict(self, texts, ignore_mask):
+    def generate_ignore_mask_for_predict(self, text, ignore_mask):
         # the input ignore_mask is char-level from client.
-        if isinstance(texts, list):
+        if isinstance(text, list):
+            assert len(text) == len(ignore_mask)
             mask_case = [self.generate_ignore_mask_for_predict(text, im) 
-                         for text, im in zip(texts, ignore_mask)]
-            
+                         for text, im in zip(text, ignore_mask)]
+
+            # 1 for ignore, has [CLS] and [SEP] 
             max_len = max(map(len, mask_case))
-            mask_case = [np.pad(msk, (0, (max_len-len(msk))), constant_values=1) # 1 for ignore
+            mask_case = [np.pad(msk, (0, (max_len-len(msk))), constant_values=1) 
                          for msk in mask_case]
             # the ignore_mask consists of 0(normal) and 1(ignore)
             # return torch.from_numpy(np.stack(mask_case))
@@ -202,15 +209,15 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
             if token.startswith('##'):
                 token = token[2:]
             if len(token) > 1:
-                return 1  # invalid
+                return 1  # invalid (ignore)
             if is_chinese_char(ord(token)):
                 return 0  # valid
-            return 1  # invalid
+            return 1  # invalid (ignore)
         
         def mark_entities(ignore_mask, tok_case, _text):
             _valid = [judge_valid_token_for_csc(tok) for tok in tok_case]
 
-            char_to_word_idx = []
+            char_to_word_idx = []  # mapping characters to tokenizer-level words
             for tok_idx, tok in enumerate(tok_case):
                 if tok.startswith('##'):
                     tok = tok[2:]
@@ -220,19 +227,20 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
             # rest_str = f"{_text}"
             
             for i, d in enumerate(ignore_mask):
-                if d == 0:
-                    continue
-                _valid[char_to_word_idx[i]] = 1
+                if d == 1:
+                    _valid[char_to_word_idx[i]] = 1
             # the single ignore_mask consists of 0(ignore) and 1(normal)
             # the flag will be reversed in batch.
             ignore_case = np.array([1] + _valid + [1])
             return ignore_case            
         
-        # w/o [CLS] ... [SEP] 
-        tok_case = self.tokenizer.tokenize(convert_to_unicode(texts))
-        # w/ [CLS] ... [SEP] 
-        ignore_case = mark_entities(ignore_mask, tok_case, texts)
         try:
+            # `text` reach here is a single sentence
+            # list w/o [CLS] ... [SEP] 
+            tok_case = self.tokenizer.tokenize(
+                clean_texts(convert_to_unicode(text)))
+            # nparray w/ [CLS] ... [SEP] 
+            ignore_case = mark_entities(ignore_mask, tok_case, text)
             assert len(tok_case) + 2 == len(ignore_case)
         except Exception as e:
             for t, m in zip(tok_case, ignore_case[1:-1]):
@@ -265,9 +273,9 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
         segment_mapping = []  # line_id: [segment_id1, segment_id2]
         for line_idx, line in enumerate(input_lines):
             segment_mapping.append([])
-            if len(line) < 179:
-                segment_mapping[line_idx].append(segment_id)
+            if len(line) < 179:  # short sentences
                 _lines.append(line)
+                segment_mapping[line_idx].append(segment_id)
                 segment_id += 1
                 continue
             head, buffer = 1, ""  
@@ -288,6 +296,7 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
                 if buffer:
                     _lines.append(buffer)
                     segment_mapping[line_idx].append(segment_id)
+                    segment_id += 1
                     buffer = ""
         try:
             assert sum(list(map(len, _lines))) == sum(list(map(len, input_lines)))
@@ -315,6 +324,7 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
         
         try:
             assert len(det_mask) == len(segment_mapping)
+            assert len(prediction_texts) == sum(map(len, segment_mapping))
         except Exception as e:
             for _d in det_mask:
                 print('tokenizer-level mask:', _d.shape)
@@ -322,9 +332,9 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
                 segment_size = [len(prediction_texts[segment_id]) for segment_id in _s]
                 print('char-level length:', '+'.join(list(map(str, segment_size))))
 
-        texts = []
-        dcn_items = []
-        result_items = []
+        _texts = []
+        _dcn_items = []
+        _result_items = []
         for line_id, segment_ids in enumerate(segment_mapping):
             if detail:
                 bucket = ["", [], []]
@@ -335,19 +345,29 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
                     bucket[2].extend(outputs[2][segment_id])
 
             # drop ignored positions in result_items.
-            mask = det_mask[line_id][1:]  # tokenizer-based token level, removed [CLS]
-            # print(bucket[0])
+            mask = det_mask[line_id]  # tokenizer-based token level, w/ [CLS]
             assert bucket[1].__len__() == bucket[2].__len__() 
+            if mask.shape[0] < bucket[1].__len__():
+                for i, b in enumerate(bucket[1]):
+                    m = mask[i+1] if i < mask.shape[0] else 'X'
+                    print(i, m, b, bucket[2][i])
             for idx, (o, p) in enumerate(zip(bucket[1], bucket[2])):
-                if o == p or B2Q(o) == p.upper():
+                if p.upper() == '[UNK]':
+                    if o.upper() == '[UNK]':
+                        bucket[2][idx] = '✿'
+                    else:
+                        bucket[2][idx] = bucket[1][idx]
                     continue
+                elif o == p:
+                    continue
+                elif o != '[UNK]' and B2Q(o) == p.upper():
+                    continue  
                 try:
-                    assert mask.shape[0] >= len(bucket[1])
-                    if mask[idx] == 1:
+                    if mask[idx + 1] == 1:  # considering [CLS]
                         bucket[2][idx] = bucket[1][idx]
                 except Exception as e:
                     print(mask.shape)
-                    print(idx)
+                    print(idx)  # failed at 257-th item
                     print(bucket[1].__len__(), bucket[2].__len__())
                     for i, (o, p) in enumerate(list(zip(bucket[1], bucket[2]))):                       
                         if -5 < i-idx < 5:
@@ -356,15 +376,15 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
                     raise e
 
             # append into return items.
-            texts.append(bucket[0])
-            dcn_items.append(bucket[1])
-            result_items.append(bucket[2])               
+            _texts.append(bucket[0])
+            _dcn_items.append(bucket[1])
+            _result_items.append(bucket[2])               
 
         if detail:
             # a list of texts [, dcn_items] [, result_items]
-            return texts, dcn_items, result_items
+            return _texts, _dcn_items, _result_items
         # a list of texts
-        return texts
+        return _texts
 
     def ask(self, request, context):
         # request is a list of texts (json str)
@@ -380,8 +400,13 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
             ignore_mask = [s['ignore_mask'] for s in sentence_list]
             # with [CLS] and [SEP]
             # the mask consists of 0(normal) and 1(ignore)
-            det_mask = self.generate_ignore_mask_for_predict(
-                texts, ignore_mask)             
+            try:
+                det_mask = self.generate_ignore_mask_for_predict(
+                    texts, ignore_mask)             
+            except Exception as e:
+                print("Error at generate_ignore_mask_for_predict().")
+                print(texts, ignore_mask)
+                raise e
             if self.debug:
                 print(request)
                 print(sentence_list)
@@ -389,12 +414,23 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
                 outputs, dcn_items, result_items = self.evaluate(
                     input_lines=texts, det_mask=det_mask, detail=True)
                 outputs = [
-                    {'text': output, 'dcn_items': dcn_item, 'result_items': result_item}
-                    for output, dcn_item, result_item in zip(outputs, dcn_items, result_items)]
+                    {'text': output, 
+                     'dcn_items': dcn_item, 
+                     'result_items': result_item}
+                    for output, dcn_item, result_item 
+                    in zip(outputs, dcn_items, result_items)]
             except Exception as e:
                 print(f"Error in evaluate(): ", str(e))
                 outputs = []
         
+        if self.debug:
+            print(len(texts), len(outputs))
+            for i, o in enumerate(outputs):
+                print(f"Input[{i}]:")
+                print(texts[i])
+                print(f"Output[{i}]:")
+                print(o['text'])
+
         # outputs = self.construct_response_dict_list(outputs)
         response_str = json.dumps(outputs)
         return correction_pb2.Response(value=response_str)
