@@ -280,9 +280,9 @@ def result_predict(sentence_list, tokenizer, model, device, batch_size=50, max_s
         preds = logits.detach().cpu().numpy()
         result.extend(preds.tolist())
 
-    # remove [CLS] and [SEP]/[PAD]
+    # remove [CLS] and [SEP]
     sentence_length = all_input_mask.sum(-1).detach().cpu().numpy()
-    labels = [tokenizer.convert_ids_to_tokens(r)[1:int(sentence_length[idx] - 1)]
+    labels = [tokenizer.convert_ids_to_tokens(r)[1: int(sentence_length[idx]-1)]
               for idx, r in enumerate(result)]
     return labels
 

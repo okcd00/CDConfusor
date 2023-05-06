@@ -9,6 +9,7 @@
 import sys
 import time
 import grpc
+from pprint import pprint
 from urllib import response
 from concurrent import futures
 from multiprocessing import Pool
@@ -100,7 +101,7 @@ def clean_texts(text):
     return ''.join([B2Q(c) for c in text])
 
 
-def split_2_short_text(text, include_symbol=False):
+def split_2_short_text(text, include_symbol=False, symbol_attached=False):
     """
     长句切分为短句
     :param text: str
@@ -117,7 +118,14 @@ def split_2_short_text(text, include_symbol=False):
         if not blk:
             continue
         if include_symbol:
-            result.append((blk, start_idx))
+            if symbol_attached:
+                if not re_han.match(blk) and len(result) > 0:
+                    _str, _idx = result[-1]
+                    result[-1] = _str + blk, _idx
+                else:
+                    result.append((blk, start_idx))
+            else:
+                result.append((blk, start_idx))
         else:
             if re_han.match(blk):
                 result.append((blk, start_idx))
@@ -147,11 +155,15 @@ def predict_on_texts(input_lines, model, tokenizer,
     result_items = [[w[2:] if w.startswith('##') else w
                      for w in res] 
                     for res in result_items]
+
     # compare
     outputs = []
     for idx, (inp, out) in enumerate(zip(dcn_items, result_items)):
-        # print(len(inp), inp)
-        # print(len(out), out)
+        if len(inp) != len(out):
+            print(len(inp) != len(out), len(inp), len(out))
+            for _i, _o in zip(inp, out):
+                print(_i, _o)
+            out = out[:len(inp)]
         offset = 0
         blanks = blank_indexes[idx]
         corrected_line = f"{input_lines[idx]}"
@@ -181,10 +193,13 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
     def __init__(self, debug=False, return_detail=False):
         self.debug = debug
         self.return_detail = False  # temporarily disabled confidence value.
+        self.batch_size = 4
         self.max_len = 180
         self.records = OrderedDict()
 
-        model_path = '/home/chendian/CDConfusor/exp/dcn/cd_models/findoc_finetuned_230410_multigpu/'
+        # model_path = '/home/chendian/CDConfusor/exp/dcn/cd_models/findoc_finetuned_230410/'  # 336035
+        # model_path = '/home/chendian/CDConfusor/exp/dcn/cd_models/findoc_finetuned_230413/'  # 374439
+        model_path = '/home/chendian/CDConfusor/exp/dcn/cd_models/findoc_finetuned_230414/'  # 476658
 
         model, tokenizer = load_model(model_path=model_path)
         self.model = model
@@ -193,7 +208,8 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
     def generate_ignore_mask_for_predict(self, text, ignore_mask):
         # the input ignore_mask is char-level from client.
         if isinstance(text, list):
-            assert len(text) == len(ignore_mask)
+            assert len(text) == len(ignore_mask), \
+                f"the lengths of text and ignore mask are not equal: {len(text)} {len(ignore_mask)}"
             mask_case = [self.generate_ignore_mask_for_predict(text, im) 
                          for text, im in zip(text, ignore_mask)]
 
@@ -241,7 +257,8 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
                 clean_texts(convert_to_unicode(text)))
             # nparray w/ [CLS] ... [SEP] 
             ignore_case = mark_entities(ignore_mask, tok_case, text)
-            assert len(tok_case) + 2 == len(ignore_case)
+            assert len(tok_case) + 2 == len(ignore_case), \
+                f"the lengths of tok_case and ignore_case are not equal: {len(tok_case) + 2} != {len(ignore_case)}"
         except Exception as e:
             for t, m in zip(tok_case, ignore_case[1:-1]):
                 print(t, m)
@@ -271,21 +288,27 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
         _lines = []
         segment_id = 0
         segment_mapping = []  # line_id: [segment_id1, segment_id2]
+
         for line_idx, line in enumerate(input_lines):
             segment_mapping.append([])
-            if len(line) < 179:  # short sentences
+            if len(line) < self.max_len - 1:  # short sentences
                 _lines.append(line)
                 segment_mapping[line_idx].append(segment_id)
                 segment_id += 1
                 continue
             head, buffer = 1, ""  
-            split_cases = split_2_short_text(line, include_symbol=True)
-            split_cases = [(split_cases[i][0] + (split_cases[i+1][0] if i+1 < len(split_cases) else ""), 
-                            split_cases[i][1]) 
-                           for i in range(0, len(split_cases), 2)]
+            split_cases = split_2_short_text(
+                line, include_symbol=True, symbol_attached=True)     
+            try:
+                assert sum([len(_t) for _t, _ in split_cases]) == len(line), \
+                    f"segmented sublines can not combine the original text."
+            except Exception as e:
+                print(line)
+                pprint(split_cases) 
+                raise e
             for subtext, start_idx in split_cases:
                 subtext_size = len(subtext)
-                if len(buffer) + subtext_size >= self.max_len:
+                if len(buffer) + subtext_size >= self.max_len - 1:
                     _lines.append(buffer)  # char-level tokens
                     segment_mapping[line_idx].append(segment_id)
                     segment_id += 1
@@ -299,7 +322,10 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
                     segment_id += 1
                     buffer = ""
         try:
-            assert sum(list(map(len, _lines))) == sum(list(map(len, input_lines)))
+            seg_length = sum(list(map(len, _lines)))
+            inp_length = sum(list(map(len, input_lines)))
+            assert seg_length == inp_length, \
+                f"segmented lines have {seg_length} tokens, but input_lines have {inp_length} tokens"
         except Exception as e:
             print(segment_mapping)
             print(list(map(len, _lines)))
@@ -308,23 +334,29 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
 
         # outputs may be a 1-item case or 3-item case
         # a list of texts [, dcn_items] [, result_items]
-        outputs = predict_on_texts(
-            input_lines=_lines, 
-            model=self.model, 
-            tokenizer=self.tokenizer,
-            batch_size=batch_size, 
-            max_len=self.max_len,
-            return_fo=detail)
-        
-        prediction_texts = outputs[0] if detail else outputs
+        try:
+            outputs = predict_on_texts(
+                input_lines=_lines, 
+                model=self.model, 
+                tokenizer=self.tokenizer,
+                batch_size=batch_size, 
+                max_len=self.max_len,
+                return_fo=detail)
+        except Exception as e:
+            print("Error on predict_on_texts()")
+            print(_lines)
+            raise e
         
         if truth_lines is not None:
             p, r, f, acc = self.get_metric(
                 input_lines, truth_lines, outputs)
         
         try:
-            assert len(det_mask) == len(segment_mapping)
-            assert len(prediction_texts) == sum(map(len, segment_mapping))
+            prediction_texts = outputs[0] if detail else outputs
+            assert len(det_mask) == len(segment_mapping), \
+                f"det_mask and segment_mapping are not aligned"
+            assert len(prediction_texts) == sum(map(len, segment_mapping)), \
+                f"prediction_texts and segment_mapping are not aligned"
         except Exception as e:
             for _d in det_mask:
                 print('tokenizer-level mask:', _d.shape)
@@ -346,7 +378,12 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
 
             # drop ignored positions in result_items.
             mask = det_mask[line_id]  # tokenizer-based token level, w/ [CLS]
-            assert bucket[1].__len__() == bucket[2].__len__() 
+            if bucket[1].__len__() != bucket[2].__len__():
+                for i, b1 in enumerate(bucket[1]):
+                    b2 = bucket[2][i] if i < bucket[2].__len__() else 'X'
+                    print(i, b1, b2)
+            assert bucket[1].__len__() == bucket[2].__len__(), \
+                f"bucket sizes are not equal: {bucket[1].__len__()} != {bucket[2].__len__()}"
             if mask.shape[0] < bucket[1].__len__():
                 for i, b in enumerate(bucket[1]):
                     m = mask[i+1] if i < mask.shape[0] else 'X'
@@ -412,7 +449,10 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
                 print(sentence_list)
             try: 
                 outputs, dcn_items, result_items = self.evaluate(
-                    input_lines=texts, det_mask=det_mask, detail=True)
+                    input_lines=texts, 
+                    det_mask=det_mask, 
+                    batch_size=self.batch_size,
+                    detail=True)
                 outputs = [
                     {'text': output, 
                      'dcn_items': dcn_item, 
@@ -421,7 +461,9 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
                     in zip(outputs, dcn_items, result_items)]
             except Exception as e:
                 print(f"Error in evaluate(): ", str(e))
+                print(texts)
                 outputs = []
+                raise e
         
         if self.debug:
             print(len(texts), len(outputs))
