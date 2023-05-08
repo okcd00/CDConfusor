@@ -249,12 +249,15 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
             # the flag will be reversed in batch.
             ignore_case = np.array([1] + _valid + [1])
             return ignore_case            
-        
         try:
             # `text` reach here is a single sentence
             # list w/o [CLS] ... [SEP] 
             tok_case = self.tokenizer.tokenize(
                 clean_texts(convert_to_unicode(text)))
+        except Exception as e:
+            print(text)
+
+        try:
             # nparray w/ [CLS] ... [SEP] 
             ignore_case = mark_entities(ignore_mask, tok_case, text)
             assert len(tok_case) + 2 == len(ignore_case), \
@@ -435,11 +438,11 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
         else:
             texts = [s['sentence'] for s in sentence_list]
             ignore_mask = [s['ignore_mask'] for s in sentence_list]
-            # with [CLS] and [SEP]
-            # the mask consists of 0(normal) and 1(ignore)
+            # with [CLS] and [SEP] 
+            # the mask consists of 0(normal) and 1(ignore) 
             try:
                 det_mask = self.generate_ignore_mask_for_predict(
-                    texts, ignore_mask)             
+                    texts, ignore_mask)
             except Exception as e:
                 print("Error at generate_ignore_mask_for_predict().")
                 print(texts, ignore_mask)
@@ -488,7 +491,7 @@ class CSCServicer(correction_pb2_grpc.CorrectionServicer):
 def serve(n_worker=1, port=20417):
     print("starting server...", time.ctime())
 
-    max_receive_message_length = 100 * 1024
+    max_receive_message_length = 128 * 1024
     service = CSCServicer(debug=False, return_detail=False)
     service.process_pool = Pool(processes=n_worker)
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=n_worker), options=[

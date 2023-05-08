@@ -270,7 +270,7 @@ def main(model_path=None):
     return res_line
 
 
-if __name__ == "__main__":
+def tmp():
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     res = {}
     from glob import glob
@@ -286,3 +286,22 @@ if __name__ == "__main__":
     from pprint import pprint
     for k, v in res.items():
         print(f"\n{k}\t{v}")
+
+
+if __name__ == "__main__":
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+    fp = './cd_models/findoc_finetuned_230414/'
+
+    model_path = fp
+    instance = Inference(model_path=model_path)
+    ret = instance([
+        "张三，1983年畜生，格力公司总经理。",
+        "关于某企业超短裙融资券的法律意见书",
+        "2022年第一次股东临死大会法律意见书",
+        "2018年8月28日，公司召开2018年第二次临死股东大会，审议通过了《关于关于使用剩余超募资金永久补充流动资金的议案》",
+        "2018年净利润有所下降，主要是受土地开发经营板块业务的影响所致，自2018年起，因业务模式调整，发行人不在确认土地开发经营业务收入和成本，故从2018年起土地开发经营板块毛利润为0，导致净利润有所下降。",
+        "2018年因经营活动产生的现金收入增长及收到的其他与经营活动有关的现金流量净增加，是得经营性现金流入增加。"
+        "2018年度-2020年度，公司营业收入分别为30,579.49万元、34,356.44万元和34,606.09万元（不含硬件销售收入），以2017年为基期，2018-2020年，公司营业收入（不含r&s硬件销售收入）年均复核增长率为11.15%。",
+    ])
+    from pprint import pprint
+    pprint(ret)

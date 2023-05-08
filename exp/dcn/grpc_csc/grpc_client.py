@@ -380,7 +380,7 @@ if __name__ == '__main__':
     sys.path.append('./')
 
     autodoc_package = json.load(
-        open('./faulty_wording_input.json', 'r'))[96*16:]  # [96*16:]
+        open('./faulty_wording_input.json', 'r'))[:]  # [96*16:]
     print(len(autodoc_package))
     # pprint(autodoc_package)
     
