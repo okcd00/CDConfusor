@@ -39,7 +39,9 @@ def test():
     with grpc.insecure_channel('localhost:20416') as channel:
         stub = correction_pb2_grpc.CorrectionStub(channel)
                 
-        test_json_str = json.dumps([u'今天天气不错？', u'假设这是一句有错误的橘子。', '他今天的行为橘子很奇怪', '我司决定发行超短裙融资券'])
+        test_json_str = json.dumps(
+            [u'今天天气不错？', u'假设这是一句有错误的橘子。', 
+             '他今天的行为橘子很奇怪', '我司决定发行超短裙融资券'])
         ask_item = correction_pb2.Item(key=test_json_str)
         print(json.loads(test_json_str))
         response = stub.ask(ask_item)
@@ -91,12 +93,20 @@ def pick_keys(autodoc_sentence_list, target_keys):
 def pre_process_grpc_items(autodoc_sentence_list):
     ret = []
     for sample in autodoc_sentence_list:
+        text = sample.get('sentence', sample.get('text', ""))
+        if not text:
+            print(sample)
         _sample = {
             'words': sample['words'],
-            'sentence': sample.get('sentence', sample.get('text', "")),
-            'ignore_mask': [0 for _ in range(len(sample['sentence']))]}
+            'sentence': text,
+            'ignore_mask': [0 for _ in range(len(text))]}
+        if text is None or text == "":
+            ret.append(_sample)
+            continue
         for key in ['times', 'attributes', 'values', 'preattributes']:
-            for _, dic in sample.get(key, {}).items():
+            if sample.get(key) is None:
+                continue
+            for _, dic in sample[key].items():
                 if dic.get('tag') and False:  # now we ignore errors in these.
                     if dic['tag'] in ['sector', 'project', 'document']:
                         continue  # we also detect errors in these mentions.
@@ -105,7 +115,8 @@ def pre_process_grpc_items(autodoc_sentence_list):
                 # _word_index = dic['word_index']
                 for _i in range(_position, _position + len(_text)):
                     _sample['ignore_mask'][_i] = 1  # 1 for ignore
-        ret.append(_sample)
+        else:
+            ret.append(_sample)
     return ret
 
 def extract_faulty_positions(ori_sent, pred_sent, confidence, predict_tokens, words):
@@ -215,7 +226,7 @@ def special_judge_for_pairs(o, p):
     return False
 
 
-def correction(address, autodoc_package, batch_size=16, word_level='word'):
+def correction(address, autodoc_package, batch_size=16, word_level='dcn'):
     output_target_keys = [
         'sid', 'file_id', 'sentence', 'source_text',
         'times', 'preattributes', 'attributes', 'values',
@@ -353,12 +364,12 @@ def test_port20416(autodoc_package, batch_size=4):
 def test_port20417(autodoc_package, batch_size=4):
     autodoc_package = correction(
         'localhost:20417', autodoc_package, 
-        batch_size=batch_size, word_level='dcn')
+        batch_size=batch_size)
     n_pred = 0
     for i, item in enumerate(autodoc_package):
         if item.get('faulty_wordings') is None:  # no add-key
-            print(f"No faulty_wordings key in {i}-th sample.")
-            print(item['sentence'])
+            # print(f"No faulty_wordings key in {i}-th sample.")
+            # print(item['sentence'])
             continue
         if item['faulty_wordings'] == []:
             continue  # empty list
@@ -380,8 +391,15 @@ if __name__ == '__main__':
     sys.path.append('./')
 
     autodoc_package = json.load(
-        open('./faulty_wording_input.json', 'r'))[:]  # [96*16:]
+        open('./o301/2871.json', 'r'))
+        # open('./grpc_csc/faulty_wording_input_02.json', 'r'))[:]
+
+    import pickle
+    # autodoc_package = pickle.load(
+    #     open('./o301/2871-output.o301.pkl', 'rb'))
+    # autodoc_package = [item for item in autodoc_package if item['data_type']=='Sentence']
+
     print(len(autodoc_package))
-    # pprint(autodoc_package)
+    # pprint(autodoc_package[1])
     
     test_port20417(autodoc_package, batch_size=4)
