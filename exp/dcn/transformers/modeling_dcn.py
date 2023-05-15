@@ -897,6 +897,7 @@ class BertForPreTraining(BertPreTrainedModel):
                 next_sentence_label=None,
                 output_attentions=None,
                 output_hidden_states=None,
+                pinyin_ids=None,
                 **kwargs):
         r"""
         labels (``torch.LongTensor`` of shape ``(batch_size, sequence_length)``, `optional`, defaults to :obj:`None`):

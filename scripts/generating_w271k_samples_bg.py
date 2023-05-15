@@ -7,11 +7,26 @@ import random
 from tqdm import tqdm
 from pprint import pprint
 from pypinyin import lazy_pinyin
+from collections import defaultdict
 from src.confusor_v2 import Confusor as ConfusorV2
+
 cfs = ConfusorV2()
 
+char_cfs = {line.strip().split('\t')[0].strip() : line.strip().split('\t')[1].strip() + line.strip().split('\t')[2].strip()
+            for line in open('../data/same_pinyin.txt') if line.strip() and line[0] != '#' and len(line.split('\t'))==3}
+print(len(char_cfs))
+
+spellgcn_cfs = defaultdict(list)
+for line in open('../data/spellGraphs_spellgcn.txt'):
+    if not line.strip():
+        continue
+    l, r, tag = line.strip().split('|')
+    if tag[1] == '音' and tag[-1] == '调':
+        spellgcn_cfs[l].append(r)
+print(len(spellgcn_cfs))
+
 # custom size for confusion set
-ROUND = 10
+ROUND = 3
 TAKE_CHAR_RATE = 0.11  # still confuse on char-level in a ratio
 # CONFUSION_SIZE = 10  # each word take at most K kinds of candidates
 WORD_SAMPLE_TIMES = 50  # each word take at most m times for generating samples
@@ -67,6 +82,20 @@ def update_used_conf(word):
         [(w, scoring_with_distance(score)) for w, score in res
          if w != word])
 
+def char_confusor_cfs(word, random_select=True, _cfs=char_cfs, piece_size=1):
+    assert len(word) >= piece_size
+    _w = f"{word}"
+    candidates = [(end_pos, _w[end_pos-piece_size:end_pos]) 
+                  for end_pos in range(piece_size, len(_w)+1)
+                  if sampled_words.get(_w[end_pos-piece_size:end_pos], 0) < WORD_SAMPLE_TIMES // piece_size]
+    if len(candidates) == 0:
+        return word
+    end_pos, piece = random.choice(candidates)
+    # piece = _w[end_pos-piece_size:end_pos]
+    piece_candidate = random.choice(_cfs.get(piece, [piece]))
+    ret = f"{_w[:end_pos-piece_size]}{piece_candidate}{_w[end_pos:]}"
+    return ret
+    
 
 def word_confusor_cfs(word, random_select=True, ignore_word=None):
     if (word not in used_conf) or len(used_conf.get(word, [])) == 0:
@@ -123,38 +152,55 @@ def piece_confusor_cfs(word, random_select=True, piece_size=2):
 import Pinyin2Hanzi
 from tqdm import tqdm
 
-DATE_STAMP = '230414'
-PATH_TO_CORPUS = '/data/chendian/csc_findoc_corpus/unique_text_lines.220803.txt'
-lines = [line.strip() for line in open(PATH_TO_CORPUS, 'r')]
+DATE_STAMP = 'W271k.ours'
+PATH_TO_CORPUS = '../exp/data/cn/Wang271k/dcn_train.tsv'
+lines = [line.strip().split('\t')[1].strip() 
+         for line in open(PATH_TO_CORPUS, 'r') 
+         if line.strip() and len(line.split('\t')) > 1 and line.strip().split('\t')[1].strip()]
+print(len(lines))
+
+
+import jieba
+import jieba.posseg as pseg
+
+
+def isname(single_word_string):
+    # print(single_word_string)
+    pair_word_list = pseg.lcut(single_word_string)
+    for eve_word, cixing in pair_word_list:
+        if cixing in ["nr", "ns", "nt", "nw", "nz", "t", "n", "PER"]:
+            return True
+    return False
+
 
 generated_err = set()
 with open(f'../exp/data/fin/findoc_augw.{DATE_STAMP}.tsv', 'w') as f:
     for _ in tqdm(range(ROUND)):
         for idx, line in tqdm(enumerate(lines)):
-            words = []
-            available = []
             line = line.strip()
-            for i, wt in enumerate(line.split('\x01')):
-                w = wt.split('\x02')[0]
-                words.append(w)
-                if len(wt.split('\x02')) == 1:
-                    # if sampled more than 10 times, skip this word
-                    if not Pinyin2Hanzi.is_chinese(w):
-                        continue
-                    # each word is sampled at most K/len(w) times
-                    if sampled_words.get(w, 0) < WORD_SAMPLE_TIMES // len(w):
-                    # if sampled_candidates.get(w, set()).__len__() < CONFUSION_SIZE:  
-                        available.append(i)
+            words = jieba.lcut(line)
+            available = []
+            for i, w in enumerate(words):
+                # if sampled more than 10 times, skip this word
+                if not Pinyin2Hanzi.is_chinese(w):
+                    continue
+                if isname(w):  # skip names
+                    continue
+                # each word is sampled at most K/len(w) times
+                # if sampled_candidates.get(w, set()).__len__() < CONFUSION_SIZE:  
+                if sampled_words.get(w, 0) < WORD_SAMPLE_TIMES // len(w):
+                    available.append(i)
+            
             if len(available) == 0:
                 continue
             cor = ''.join(words)
             if not 8 < len(cor) < 192:
                 continue
-            if len(available) == 0:
-                continue
             _i = random.choice(available)
             _w = words[_i]
-            if len(_w) > 1 and random.random() < TAKE_CHAR_RATE:
+            if False:  # True:
+                _c = char_confusor_cfs(_w, _cfs=char_cfs) 
+            elif len(_w) > 1 and random.random() < TAKE_CHAR_RATE:
                 _c = piece_confusor_cfs(_w, piece_size=1)
             elif len(_w) > 2:  # allow at most 2 char-level in one word.
                 _c = piece_confusor_cfs(_w, piece_size=2)
