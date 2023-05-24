@@ -1,6 +1,6 @@
 ## Confusor
 
-> A module for generating the word-level (i.e., 1 or more words) confusion-set for a longer phrase.
+> A module for generating confusion-sets for generating CSC samples.
 
 
 ### Overview
