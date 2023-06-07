@@ -42,18 +42,31 @@ See `/docs/confset.pdf` for more details.
 
 
 
-#### Call the Confusor
+#### 2. Call the Confusor!
 
 ```
-cfs = Confusor(return_size=10, debug=False)
-# ret = cfs('世界', return_score=True)
-ret = cfs('世界')
+# src/confusor_v2.py#main()
+cfs = Confusor()
+# warmup (generating memory files for boosting)
+# cfs.warmup_ism_memory()  
+# cfs.save_memory()
+
+ret = cfs('世界', return_score=False)
+print(cfs.timer)
+print(ret)
+
+# save unseen phrases in memory files.
+# cfs.ism.update_memory_from_tmp()
 ```
 
 Then you can get the confusion-set of size 10 as follows:
+
 ```
 ['实际', '视界', '世纪', '世届', '十届', '十界', '视觉', '事界', '四届', '时节']
 ```
+
+When you set `return_score=True`, the scores are also shown.
+
 
 ### Datasets
 
